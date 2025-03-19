@@ -42,4 +42,5 @@ func init() {
 	RootCmd.PersistentFlags().StringP("username", "u", "admin", "specify username")
 	RootCmd.PersistentFlags().StringP("password", "p", "admin", "specify username")
 	RootCmd.PersistentFlags().Bool("insecure", false, "do not verify connection certificates")
+	RootCmd.PersistentFlags().BoolP("json", "j", false, "output as json")
 }

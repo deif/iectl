@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/deif/iectl/cmd/bsp"
 	"github.com/spf13/cobra"
 )
 
@@ -19,5 +20,6 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.AddCommand(bsp.RootCmd)
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

@@ -1,4 +1,4 @@
-# iectl - cli for the IE generation products.
+# iectl - cli for the IE generation products
 
 ## Overview
 
@@ -54,4 +54,3 @@ This project is licensed under the **MIT License**. See the `LICENSE` file for d
 ## Support
 
 For issues and feature requests, please open an issue on [GitHub](https://github.com/deif/iectl/issues).
-

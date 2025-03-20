@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 )
+
+var ErrInvalidCredentials = errors.New("invalid credentials")
 
 func authenticatedClient(host, user, pass string, insecure bool) (*http.Client, error) {
 	c := &http.Client{}
@@ -51,7 +54,11 @@ func authenticatedClient(host, user, pass string, insecure bool) (*http.Client, 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusForbidden:
+		return nil, ErrInvalidCredentials
+	case http.StatusOK:
+	default:
 		return nil, fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
 	}
 

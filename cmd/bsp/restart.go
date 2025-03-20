@@ -1,6 +1,8 @@
 package bsp
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -8,19 +10,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var factoryResetCmd = &cobra.Command{
-	Use:   "factory-reset",
-	Short: "Factory reset device",
+var restartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "Reboots the device",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := cmd.Context().Value(aClientKey).(*http.Client)
 		host, _ := cmd.Flags().GetString("hostname")
 		u := url.URL{
 			Scheme: "https",
 			Host:   host,
-			Path:   "/bsp/system/reset",
+			Path:   "/bsp/system/restart",
 		}
 
-		resp, err := client.Post(u.String(), "application/binary", nil)
+		req := struct {
+			Delay int `json:"delay"`
+		}{
+			Delay: 0,
+		}
+
+		body, err := json.Marshal(req)
+		if err != nil {
+			return err
+		}
+
+		resp, err := client.Post(u.String(), "application/json", bytes.NewReader(body))
 		if err != nil {
 			return fmt.Errorf("unable to http post: %w", err)
 		}
@@ -38,5 +51,5 @@ var factoryResetCmd = &cobra.Command{
 }
 
 func init() {
-	RootCmd.AddCommand(factoryResetCmd)
+	RootCmd.AddCommand(restartCmd)
 }

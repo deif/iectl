@@ -22,6 +22,7 @@ var restartCmd = &cobra.Command{
 			Path:   "/bsp/system/restart",
 		}
 
+		//TODO: accept delay as argument to restart - default to zero
 		req := struct {
 			Delay int `json:"delay"`
 		}{

@@ -53,6 +53,7 @@ var firmwareCmd = &cobra.Command{
 		}
 		m := model{
 			progress: progress.New(progress.WithDefaultGradient()),
+			total:    int(info.Size()),
 		}
 
 		// Start Bubble Tea
@@ -60,8 +61,8 @@ var firmwareCmd = &cobra.Command{
 		pWrite := io.MultiWriter(multipartWriter,
 			&progressWriter{
 				app:     p,
-				total:   int(info.Size()),
 				limiter: rate.NewLimiter(5, 1),
+				total:   int(info.Size()),
 			})
 
 		var group errgroup.Group
@@ -109,7 +110,9 @@ var firmwareCmd = &cobra.Command{
 			if resp.StatusCode != http.StatusCreated {
 				return fmt.Errorf("unexpected status code: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 			}
-			p.Quit()
+
+			p.Send(progressMsg{ratio: 1, written: int(info.Size())})
+
 			return nil
 		})
 
@@ -126,7 +129,10 @@ var firmwareCmd = &cobra.Command{
 			return fmt.Errorf("upload filed: %w", err)
 		}
 
-		fmt.Println("Successfully Uploaded file")
+		fmt.Println("\n\nSuccessfully Uploaded file")
+
+		// but we are not finished - we have the file uploaded, now we must
+		// ask the device to apply the update
 
 		return nil
 	},
@@ -138,15 +144,15 @@ func init() {
 
 type progressWriter struct {
 	app     *tea.Program
-	total   int
 	written int
+	total   int
 	limiter *rate.Limiter
 }
 
 func (p *progressWriter) Write(in []byte) (int, error) {
 	p.written += len(in)
 	if p.limiter.Allow() {
-		p.app.Send(progressMsg(float64(p.written) / float64(p.total)))
+		p.app.Send(progressMsg{ratio: float64(p.written) / float64(p.total), written: p.written})
 	}
 	return len(in), nil
 }

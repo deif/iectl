@@ -1,12 +1,14 @@
 package bsp
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dustin/go-humanize"
 )
 
 var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render
@@ -16,9 +18,10 @@ const (
 	maxWidth = 80
 )
 
-type progressMsg float64
-
-type progressErrMsg struct{ err error }
+type progressMsg struct {
+	ratio   float64
+	written int
+}
 
 func finalPause() tea.Cmd {
 	return tea.Tick(time.Millisecond*750, func(_ time.Time) tea.Msg {
@@ -27,9 +30,9 @@ func finalPause() tea.Cmd {
 }
 
 type model struct {
-	pw       *progressWriter
 	progress progress.Model
-	err      error
+	total    int
+	written  int
 }
 
 func (m model) Init() tea.Cmd {
@@ -38,27 +41,18 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "ctrl-c" {
-			return m, tea.Quit
-		}
-		return m, nil
 	case tea.WindowSizeMsg:
 		m.progress.Width = min(msg.Width-padding*2-4, maxWidth)
 		return m, nil
-
-	case progressErrMsg:
-		m.err = msg.err
-		return m, tea.Quit
-
 	case progressMsg:
 		var cmds []tea.Cmd
+		m.written = msg.written
 
-		if msg >= 1.0 {
+		if msg.ratio >= 1.0 {
 			cmds = append(cmds, tea.Sequence(finalPause(), tea.Quit))
 		}
 
-		cmds = append(cmds, m.progress.SetPercent(float64(msg)))
+		cmds = append(cmds, m.progress.SetPercent(msg.ratio))
 		return m, tea.Batch(cmds...)
 
 	// FrameMsg is sent when the progress bar wants to animate itself
@@ -73,12 +67,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	if m.err != nil {
-		return "Error: " + m.err.Error() + "\n"
-	}
-
 	pad := strings.Repeat(" ", padding)
 	return "\n" +
 		pad + m.progress.View() + "\n" +
-		pad + helpStyle("Press any key to quit")
+		pad + helpStyle(fmt.Sprintf("%s of %s", humanize.Bytes(uint64(m.written)), humanize.Bytes(uint64(m.total))))
 }

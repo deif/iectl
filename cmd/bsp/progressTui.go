@@ -1,14 +1,12 @@
 package bsp
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dustin/go-humanize"
 )
 
 var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render
@@ -19,8 +17,8 @@ const (
 )
 
 type progressMsg struct {
-	ratio   float64
-	written int
+	ratio  float64
+	status string
 }
 
 func finalPause() tea.Cmd {
@@ -31,8 +29,7 @@ func finalPause() tea.Cmd {
 
 type model struct {
 	progress progress.Model
-	total    int
-	written  int
+	status   string
 }
 
 func (m model) Init() tea.Cmd {
@@ -46,7 +43,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case progressMsg:
 		var cmds []tea.Cmd
-		m.written = msg.written
+		m.status = msg.status
 
 		if msg.ratio >= 1.0 {
 			cmds = append(cmds, tea.Sequence(finalPause(), tea.Quit))
@@ -70,5 +67,5 @@ func (m model) View() string {
 	pad := strings.Repeat(" ", padding)
 	return "\n" +
 		pad + m.progress.View() + "\n" +
-		pad + helpStyle(fmt.Sprintf("%s of %s", humanize.Bytes(uint64(m.written)), humanize.Bytes(uint64(m.total))))
+		pad + helpStyle(m.status)
 }

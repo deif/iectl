@@ -1,6 +1,7 @@
 package bsp
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -8,9 +9,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
@@ -53,7 +56,7 @@ var firmwareCmd = &cobra.Command{
 		}
 		m := model{
 			progress: progress.New(progress.WithDefaultGradient()),
-			total:    int(info.Size()),
+			status:   "Connecting",
 		}
 
 		// Start Bubble Tea
@@ -65,8 +68,9 @@ var firmwareCmd = &cobra.Command{
 				total:   int(info.Size()),
 			})
 
-		var group errgroup.Group
+		fmt.Printf("Uploading firmware\n")
 
+		var group errgroup.Group
 		group.Go(func() error {
 			_, err := io.Copy(pWrite, fd)
 			if err != nil {
@@ -111,7 +115,7 @@ var firmwareCmd = &cobra.Command{
 				return fmt.Errorf("unexpected status code: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 			}
 
-			p.Send(progressMsg{ratio: 1, written: int(info.Size())})
+			p.Send(progressMsg{ratio: 1, status: "Finished uploading"})
 
 			return nil
 		})
@@ -129,10 +133,93 @@ var firmwareCmd = &cobra.Command{
 			return fmt.Errorf("upload filed: %w", err)
 		}
 
-		fmt.Println("\n\nSuccessfully Uploaded file")
-
 		// but we are not finished - we have the file uploaded, now we must
 		// ask the device to apply the update
+
+		u.Path = "/bsp/firmware/upgrade"
+		req, err := http.NewRequest("PUT", u.String(), nil)
+		if err != nil {
+			return fmt.Errorf("unable to create http put request: %w", err)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("unable to call http endpoint: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusAccepted {
+			return fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
+		}
+
+		fmt.Printf("\n\nUpgrading firmware\n")
+
+		// Lets do another progressbar
+		p = tea.NewProgram(m)
+		// we need to deal with errors from both the progress routine
+		// and the app.
+
+		group.Go(func() error {
+			var state = struct {
+				Lines []struct {
+					Progress int
+					Text     string
+				}
+			}{}
+			for {
+				time.Sleep(time.Second / 4)
+				resp, err := client.Get(u.String())
+				if err != nil {
+					p.Send(progressMsg{ratio: 0, status: fmt.Sprintf("ERR: %s", err)})
+					continue
+				}
+
+				switch resp.StatusCode {
+				case http.StatusOK:
+				case http.StatusAccepted:
+				case http.StatusCreated:
+					p.Quit()
+					fmt.Printf("\n\nFirmware upgraded\n")
+					return nil
+				case http.StatusNotFound:
+					fmt.Printf("\n\nNo firmware found\n")
+					p.Quit()
+					return nil
+				case http.StatusInternalServerError:
+					p.Quit()
+					return fmt.Errorf("Failed to install image")
+				default:
+					p.Quit()
+					return fmt.Errorf("Unexpected status code %d", resp.StatusCode)
+				}
+
+				dec := json.NewDecoder(resp.Body)
+				err = dec.Decode(&state)
+				if err != nil {
+					p.Send(progressMsg{ratio: 0, status: fmt.Sprintf("ERR: %s", err)})
+					resp.Body.Close()
+					continue
+				}
+
+				resp.Body.Close()
+
+				p.Send(progressMsg{
+					ratio:  float64(state.Lines[0].Progress) / 100,
+					status: state.Lines[0].Text,
+				})
+			}
+		})
+		group.Go(func() error {
+			if _, err := p.Run(); err != nil {
+				return fmt.Errorf("unable to start gui: %w", err)
+			}
+			return nil
+		})
+
+		// wait for tui and status loop to exit
+		err = group.Wait()
+		if err != nil {
+			return err
+		}
 
 		return nil
 	},
@@ -152,7 +239,11 @@ type progressWriter struct {
 func (p *progressWriter) Write(in []byte) (int, error) {
 	p.written += len(in)
 	if p.limiter.Allow() {
-		p.app.Send(progressMsg{ratio: float64(p.written) / float64(p.total), written: p.written})
+		p.app.Send(
+			progressMsg{
+				ratio:  float64(p.written) / float64(p.total),
+				status: fmt.Sprintf("%s of %s", humanize.Bytes(uint64(p.written)), humanize.Bytes(uint64(p.total))),
+			})
 	}
 	return len(in), nil
 }

@@ -32,14 +32,16 @@ func Query(msg dns.Msg) error {
 	// TODO: this does not do ipv6
 	for _, iface := range interfaces {
 		// Skip down or loopback interfaces
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+		if iface.Flags&net.FlagUp == 0 ||
+			iface.Flags&net.FlagLoopback != 0 ||
+			iface.Flags&net.FlagPointToPoint != 0 {
 			continue
 		}
 
 		// Create a UDP connection for sending
 		conn, err := net.ListenMulticastUDP("udp4", &iface, udpAddr)
 		if err != nil {
-			return fmt.Errorf("error creating UDP connection: %w", err)
+			return fmt.Errorf("error creating UDP connection: %w on \"%s\" (%T)", err, iface.Name, err)
 
 		}
 

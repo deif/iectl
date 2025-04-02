@@ -10,7 +10,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "iectl",
-	Short: "cli for the DEIF Intelligent Energy generation of products.",
+	Short: "cli for the IE generation of DEIF products.",
 }
 
 func Execute() {

@@ -2,10 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var (
@@ -18,8 +16,9 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version info on iectl",
 	Run: func(cmd *cobra.Command, args []string) {
+		interactive, _ := cmd.Flags().GetBool("interactive")
 		fmt.Printf("iectl %s, commit %s, built at %s\n", version, commit, date)
-		fmt.Printf("interactive terminal: %t\n", term.IsTerminal(int(os.Stdout.Fd())))
+		fmt.Printf("interactive terminal: %t\n", interactive)
 	},
 }
 

@@ -2,7 +2,9 @@ package mdns
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +25,10 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 		for {
 			err := Query(b.Question)
 			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+
 				panic(err) // FIXME: not optimal
 			}
 

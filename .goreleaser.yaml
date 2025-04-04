@@ -28,7 +28,7 @@ builds:
       post:
       - cmd: | 
           osslsigncode sign -pkcs12 
-          certificate.pfx -n "iectl" 
+          /tmp/cert.pfx -n "iectl" 
           -i "https://github.com/deif/iectl" 
           -t http://timestamp.digicert.com 
           -in {{ .Path }} -out {{ .Path }}-signed.exe

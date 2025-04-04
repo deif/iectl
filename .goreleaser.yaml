@@ -5,17 +5,35 @@ before:
     - go generate ./...
 
 builds:
-  - env:
+  - id: linux
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
-      - windows
-    ldflags:
+    flags: 
+      - -trimpath
+    ldflags: &ldflags
       - | 
-          -s -w 
+          -s -w
           -X github.com/deif/iectl/cmd.version={{ .Version }} 
           -X github.com/deif/iectl/cmd.commit={{ .Commit }} 
           -X github.com/deif/iectl/cmd.date={{ .Date }}
+  - id: windows
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    ldflags: *ldflags
+    hooks:
+      post:
+      - cmd: | 
+          osslsigncode sign -pkcs12 
+          /tmp/cert.pfx -n "iectl" 
+          -i "https://github.com/deif/iectl" 
+          -t http://timestamp.digicert.com 
+          -in {{ .Path }} -out {{ .Path }}-signed.exe
+      # Throw away the unsigned binary
+      - cmd: mv {{ .Path }}-signed.exe {{ .Path }}
 
 archives:
   - formats: [tar.gz]

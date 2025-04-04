@@ -31,10 +31,11 @@ var RootCmd = &cobra.Command{
 
 		c, err := authenticatedClient(host, user, pass, insecure)
 
+		interactive, _ := cmd.Flags().GetBool("interactive")
+
 		// If we have a terminal, and the error was invalid credentials
 		// try to fix the issue by asking for another password...
-		if errors.Is(err, ErrInvalidCredentials) &&
-			term.IsTerminal(int(os.Stdout.Fd())) {
+		if errors.Is(err, ErrInvalidCredentials) && interactive {
 			for {
 				fmt.Printf("Enter password for \"%s\": ", user)
 

@@ -11,8 +11,9 @@ import (
 )
 
 var restartCmd = &cobra.Command{
-	Use:   "restart",
-	Short: "Reboots the device",
+	Use:     "restart",
+	Short:   "Reboots the device",
+	Aliases: []string{"reboot"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := cmd.Context().Value(aClientKey).(*http.Client)
 		host, _ := cmd.Flags().GetString("hostname")

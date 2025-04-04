@@ -5,11 +5,12 @@ import (
 
 	"github.com/deif/iectl/cmd/bsp"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "iectl",
-	Short: "cli for the DEIF Intelligent Energy generation of products.",
+	Short: "cli for the IE generation of DEIF products.",
 }
 
 func Execute() {
@@ -21,5 +22,7 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(bsp.RootCmd)
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().BoolP(
+		"interactive", "i", term.IsTerminal(int(os.Stdout.Fd())),
+		"interactive mode, ask for passwords, display pretty ascii")
 }

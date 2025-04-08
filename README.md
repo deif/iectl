@@ -11,6 +11,19 @@ The **iectl** is a command-line interface written in **Go** that simplifies var
 
 ## Installation
 
+### Windows users: use `winget`
+Users running Windows 10 May 2020 Update or later, install iectl by entering:
+
+```
+winget install --exact DEIF.iectl
+```
+
+Upgrade using the following command:
+```
+winget upgrade --exact DEIF.iectl
+```
+
+
 ### Download Pre-built Binary
 
 We provide pre-built binaries for Linux and Windows.
@@ -36,10 +49,17 @@ iectl [command] [options]
 
 ### Available Commands
 
-| Command          | Description                       |
-| ---------------- | --------------------------------- |
-| `browse`         | Browse for DEIF devices           |
-| `help`           | Displays help information         |
+| Command             | Description                       |
+| ------------------- | --------------------------------- |
+| `browse`            | Browse for DEIF devices           |
+| `bsp install`       | Install firmware on device        |
+| `bsp factory-reset` | Reset device to factory state     |
+| `bsp hostname`      | Get or set hostname               |
+| `bsp rdp`           | Get or enable/disable rdp         |
+| `bsp ssh`           | Get or enable/disable ssh         |
+| `bsp restart`       | Reboots device                    |
+| `bsp status`        | General device status             |
+| `help`              | Displays help information         |
 
 For more details, use:
 

@@ -5,25 +5,25 @@ before:
     - go generate ./...
 
 builds:
-  - id: linux
+  - &defaultBuild
+    id: linux
     env:
       - CGO_ENABLED=0
     goos:
       - linux
+    mod_timestamp: "{{ .CommitTimestamp }}"
     flags: 
       - -trimpath
-    ldflags: &ldflags
+    ldflags:
       - | 
           -s -w
           -X github.com/deif/iectl/cmd.version={{ .Version }} 
           -X github.com/deif/iectl/cmd.commit={{ .Commit }} 
-          -X github.com/deif/iectl/cmd.date={{ .Date }}
-  - id: windows
-    env:
-      - CGO_ENABLED=0
+          -X github.com/deif/iectl/cmd.date={{ .CommitDate }}
+  - << : *defaultBuild
+    id: windows
     goos:
       - windows
-    ldflags: *ldflags
     hooks:
       post:
       - cmd: | 

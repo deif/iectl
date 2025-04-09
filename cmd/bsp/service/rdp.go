@@ -1,4 +1,4 @@
-package bsp
+package service
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/deif/iectl/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +24,7 @@ var rdpCmd = &cobra.Command{
 			return getrdpStatus(cmd, args)
 		}
 
-		client := cmd.Context().Value(aClientKey).(*http.Client)
+		client := auth.FromContext(cmd.Context())
 		host, _ := cmd.Flags().GetString("hostname")
 		u := url.URL{
 			Scheme: "https",
@@ -76,7 +77,7 @@ func init() {
 }
 
 func getrdpStatus(cmd *cobra.Command, args []string) error {
-	client := cmd.Context().Value(aClientKey).(*http.Client)
+	client := auth.FromContext(cmd.Context())
 	host, _ := cmd.Flags().GetString("hostname")
 	u := url.URL{
 		Scheme: "https",

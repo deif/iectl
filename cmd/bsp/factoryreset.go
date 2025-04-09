@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/deif/iectl/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ var factoryResetCmd = &cobra.Command{
 	Use:   "factory-reset",
 	Short: "Factory reset device",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := cmd.Context().Value(aClientKey).(*http.Client)
+		client := auth.FromContext(cmd.Context())
 		host, _ := cmd.Flags().GetString("hostname")
 		u := url.URL{
 			Scheme: "https",

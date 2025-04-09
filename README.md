@@ -55,8 +55,8 @@ iectl [command] [options]
 | `bsp install`       | Install firmware on device        |
 | `bsp factory-reset` | Reset device to factory state     |
 | `bsp hostname`      | Get or set hostname               |
-| `bsp rdp`           | Get or enable/disable rdp         |
-| `bsp ssh`           | Get or enable/disable ssh         |
+| `bsp service rdp`   | Get or enable/disable rdp         |
+| `bsp service ssh`   | Get or enable/disable ssh         |
 | `bsp restart`       | Reboots device                    |
 | `bsp status`        | General device status             |
 | `help`              | Displays help information         |

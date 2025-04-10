@@ -23,7 +23,7 @@ var setCmd = &cobra.Command{
 		u := url.URL{
 			Scheme: "https",
 			Host:   host,
-			Path:   "/bsp/keys/sshkey",
+			Path:   "/bsp/keys/ssh",
 		}
 
 		var keymaterial strings.Builder
@@ -64,6 +64,8 @@ var setCmd = &cobra.Command{
 		switch resp.StatusCode {
 		case http.StatusOK:
 		case http.StatusAccepted:
+		case http.StatusBadRequest:
+			return fmt.Errorf("bad SSH key, server responded with 400 Bad Request")
 		default:
 			return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
 		}

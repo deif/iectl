@@ -22,7 +22,7 @@ var RootCmd = &cobra.Command{
 		u := url.URL{
 			Scheme: "https",
 			Host:   host,
-			Path:   "/bsp/keys/sshkey",
+			Path:   "/bsp/keys/ssh",
 		}
 
 		resp, err := client.Get(u.String())

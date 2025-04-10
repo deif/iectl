@@ -9,6 +9,7 @@ import (
 
 	"github.com/deif/iectl/auth"
 	"github.com/deif/iectl/cmd/bsp/service"
+	"github.com/deif/iectl/cmd/bsp/sshkey"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -74,6 +75,7 @@ func init() {
 	RootCmd.PersistentFlags().Bool("insecure", false, "do not verify connection certificates")
 	RootCmd.PersistentFlags().BoolP("json", "j", false, "output as json")
 	RootCmd.AddCommand(service.RootCmd)
+	RootCmd.AddCommand(sshkey.RootCmd)
 }
 
 func readPassword() ([]byte, error) {

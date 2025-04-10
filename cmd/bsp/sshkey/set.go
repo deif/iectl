@@ -23,7 +23,7 @@ var setCmd = &cobra.Command{
 		u := url.URL{
 			Scheme: "https",
 			Host:   host,
-			Path:   "/bsp/user/admin/sshkey",
+			Path:   "/bsp/keys/sshkey",
 		}
 
 		var keymaterial strings.Builder

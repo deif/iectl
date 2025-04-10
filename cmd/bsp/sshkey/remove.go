@@ -19,7 +19,7 @@ var removeCmd = &cobra.Command{
 		u := url.URL{
 			Scheme: "https",
 			Host:   host,
-			Path:   "/bsp/user/admin/sshkey",
+			Path:   "/bsp/keys/sshkey",
 		}
 
 		req, err := http.NewRequest("DELETE", u.String(), nil)

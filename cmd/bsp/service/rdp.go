@@ -14,7 +14,7 @@ import (
 )
 
 var rdpCmd = &cobra.Command{
-	Use:       "rdp",
+	Use:       "rdp [enable|disable|status]",
 	Short:     "Get rdp status or enable/disable",
 	Args:      cobra.OnlyValidArgs,
 	ValidArgs: []cobra.Completion{"enable", "disable", "status"},

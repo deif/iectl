@@ -14,7 +14,7 @@ import (
 )
 
 var sshCmd = &cobra.Command{
-	Use:       "ssh",
+	Use:       "ssh [enable|disable|status]",
 	Short:     "Get ssh status or enable/disable",
 	Args:      cobra.OnlyValidArgs,
 	ValidArgs: []cobra.Completion{"enable", "disable", "status"},

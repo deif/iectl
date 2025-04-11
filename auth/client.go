@@ -1,4 +1,4 @@
-package bsp
+package auth
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func authenticatedClient(host, user, pass string, insecure bool) (*http.Client, error) {
+func Client(host, user, pass string, insecure bool) (*http.Client, error) {
 	c := &http.Client{}
 
 	if insecure {

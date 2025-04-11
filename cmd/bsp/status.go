@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/deif/iectl/auth"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +18,7 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "General system status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := cmd.Context().Value(aClientKey).(*http.Client)
+		client := auth.FromContext(cmd.Context())
 		host, _ := cmd.Flags().GetString("hostname")
 		u := url.URL{
 			Scheme: "https",

@@ -1,20 +1,17 @@
 package bsp
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/deif/iectl/auth"
+	"github.com/deif/iectl/cmd/bsp/service"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
-
-type AuthenticatedClientCtx string
-
-var aClientKey AuthenticatedClientCtx = "github.com/deif/iectl/cmd/bsp.AuthenticatedClient"
 
 var RootCmd = &cobra.Command{
 	Use:   "bsp",
@@ -29,13 +26,13 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("required flag \"hostname\" not set")
 		}
 
-		c, err := authenticatedClient(host, user, pass, insecure)
+		c, err := auth.Client(host, user, pass, insecure)
 
 		interactive, _ := cmd.Flags().GetBool("interactive")
 
 		// If we have a terminal, and the error was invalid credentials
 		// try to fix the issue by asking for another password...
-		if errors.Is(err, ErrInvalidCredentials) && interactive {
+		if errors.Is(err, auth.ErrInvalidCredentials) && interactive {
 			for {
 				fmt.Printf("Enter password for \"%s\": ", user)
 
@@ -46,8 +43,8 @@ var RootCmd = &cobra.Command{
 				}
 
 				fmt.Println()
-				c, err = authenticatedClient(host, user, string(p), insecure)
-				if errors.Is(err, ErrInvalidCredentials) {
+				c, err = auth.Client(host, user, string(p), insecure)
+				if errors.Is(err, auth.ErrInvalidCredentials) {
 					continue
 				}
 				if err != nil {
@@ -62,7 +59,8 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("unable to authenticate: %w", err)
 		}
 
-		cmd.SetContext(context.WithValue(cmd.Context(), aClientKey, c))
+		cmd.SetContext(auth.NewContext(cmd.Context(), c))
+
 		return nil
 	},
 }
@@ -75,6 +73,7 @@ func init() {
 	RootCmd.PersistentFlags().StringP("password", "p", "admin", "specify username")
 	RootCmd.PersistentFlags().Bool("insecure", false, "do not verify connection certificates")
 	RootCmd.PersistentFlags().BoolP("json", "j", false, "output as json")
+	RootCmd.AddCommand(service.RootCmd)
 }
 
 func readPassword() ([]byte, error) {

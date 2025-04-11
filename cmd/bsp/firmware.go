@@ -13,6 +13,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/deif/iectl/auth"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -35,7 +36,7 @@ var firmwareCmd = &cobra.Command{
 			return fmt.Errorf("unable to stat \"%q\": %w", args[0], err)
 		}
 
-		client := cmd.Context().Value(aClientKey).(*http.Client)
+		client := auth.FromContext(cmd.Context())
 		host, _ := cmd.Flags().GetString("hostname")
 		u := url.URL{
 			Scheme: "https",

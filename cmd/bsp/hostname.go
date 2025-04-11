@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/deif/iectl/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,7 @@ var hostnameCmd = &cobra.Command{
 			return gethostnameStatus(cmd, args)
 		}
 
-		client := cmd.Context().Value(aClientKey).(*http.Client)
+		client := auth.FromContext(cmd.Context())
 		host, _ := cmd.Flags().GetString("hostname")
 		u := url.URL{
 			Scheme: "https",
@@ -65,7 +66,7 @@ func init() {
 }
 
 func gethostnameStatus(cmd *cobra.Command, args []string) error {
-	client := cmd.Context().Value(aClientKey).(*http.Client)
+	client := auth.FromContext(cmd.Context())
 	host, _ := cmd.Flags().GetString("hostname")
 	u := url.URL{
 		Scheme: "https",

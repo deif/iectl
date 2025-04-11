@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/deif/iectl/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,7 @@ var restartCmd = &cobra.Command{
 	Short:   "Reboots the device",
 	Aliases: []string{"reboot"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := cmd.Context().Value(aClientKey).(*http.Client)
+		client := auth.FromContext(cmd.Context())
 		host, _ := cmd.Flags().GetString("hostname")
 		u := url.URL{
 			Scheme: "https",

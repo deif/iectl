@@ -27,16 +27,16 @@ func finalPause() tea.Cmd {
 	})
 }
 
-type model struct {
+type progressTUI struct {
 	progress progress.Model
 	status   string
 }
 
-func (m model) Init() tea.Cmd {
+func (m progressTUI) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m progressTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.progress.Width = min(msg.Width-padding*2-4, maxWidth)
@@ -63,7 +63,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m model) View() string {
+func (m progressTUI) View() string {
 	pad := strings.Repeat(" ", padding)
 	return "\n" +
 		pad + m.progress.View() + "\n" +

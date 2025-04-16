@@ -24,6 +24,13 @@ var firmwareCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install new firmware on device",
 	Args:  cobra.MatchAll(cobra.ExactArgs(1)),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		asJson, _ := cmd.Flags().GetBool("json")
+		if asJson {
+			return fmt.Errorf("install cant do --json")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fd, err := os.Open(args[0])
 		if err != nil {
@@ -55,17 +62,29 @@ var firmwareCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("unable to create multipart body: %s", err)
 		}
-		m := model{
-			progress: progress.New(progress.WithDefaultGradient()),
-			status:   "Connecting",
-		}
 
 		// Start Bubble Tea
-		p := tea.NewProgram(m)
+		var p userInterface
+		var rateLimiter *rate.Limiter
+		interactive, _ := cmd.Flags().GetBool("interactive")
+		if interactive {
+			m := progressTUI{
+				progress: progress.New(progress.WithDefaultGradient()),
+				status:   "Connecting",
+			}
+
+			p = tea.NewProgram(m)
+			rateLimiter = rate.NewLimiter(5, 1)
+
+		} else {
+			p = &boringProgress{Task: "Uploading"}
+			rateLimiter = rate.NewLimiter(1, 1)
+		}
+
 		pWrite := io.MultiWriter(multipartWriter,
 			&progressWriter{
 				app:     p,
-				limiter: rate.NewLimiter(5, 1),
+				limiter: rateLimiter,
 				total:   int(info.Size()),
 			})
 
@@ -155,7 +174,18 @@ var firmwareCmd = &cobra.Command{
 		fmt.Printf("\n\nUpgrading firmware\n")
 
 		// Lets do another progressbar
-		p = tea.NewProgram(m)
+		var interval time.Duration
+		if interactive {
+			m := progressTUI{
+				progress: progress.New(progress.WithDefaultGradient()),
+				status:   "Connecting",
+			}
+			p = tea.NewProgram(m)
+			interval = time.Second / 4
+		} else {
+			p = &boringProgress{Task: "Upgrading"}
+			interval = time.Second
+		}
 		// we need to deal with errors from both the progress routine
 		// and the app.
 
@@ -167,7 +197,7 @@ var firmwareCmd = &cobra.Command{
 				}
 			}{}
 			for {
-				time.Sleep(time.Second / 4)
+				time.Sleep(interval)
 				resp, err := client.Get(u.String())
 				if err != nil {
 					p.Send(progressMsg{ratio: 0, status: fmt.Sprintf("ERR: %s", err)})
@@ -230,8 +260,33 @@ func init() {
 	RootCmd.AddCommand(firmwareCmd)
 }
 
+type boringProgress struct {
+	Task string
+}
+
+func (b *boringProgress) Send(m tea.Msg) {
+	switch v := m.(type) {
+	case progressMsg:
+		fmt.Printf("%s: %d%% - %s\n", b.Task, int(v.ratio*100), v.status)
+	default:
+		fmt.Printf("%s: %s\n", b.Task, m)
+	}
+}
+
+func (b *boringProgress) Run() (tea.Model, error) {
+	return nil, nil
+}
+
+func (b *boringProgress) Quit() {}
+
+type userInterface interface {
+	Send(tea.Msg)
+	Run() (tea.Model, error)
+	Quit()
+}
+
 type progressWriter struct {
-	app     *tea.Program
+	app     userInterface
 	written int
 	total   int
 	limiter *rate.Limiter

@@ -17,7 +17,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print version info on iectl",
 	Run: func(cmd *cobra.Command, args []string) {
 		interactive, _ := cmd.Flags().GetBool("interactive")
-		fmt.Printf("iectl %s, commit %s, built at %s\n", version, commit, date)
+		fmt.Printf("iectl %s, commit %s (%s)\n", version, commit, date)
 		fmt.Printf("interactive terminal: %t\n", interactive)
 	},
 }

@@ -20,6 +20,13 @@ var updates chan []*mdns.Target
 var browseCmd = &cobra.Command{
 	Use:   "browse",
 	Short: "browse DEIF devices on the network",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		asJson, _ := cmd.Flags().GetBool("json")
+		if asJson {
+			return fmt.Errorf("browse cant do --json")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		msg := new(dns.Msg)
 		msg.SetQuestion(dns.Fqdn("_base-unit-deif._tcp.local"), dns.TypePTR)

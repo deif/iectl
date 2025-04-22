@@ -22,6 +22,7 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(bsp.RootCmd)
+	rootCmd.PersistentFlags().BoolP("json", "j", false, "output as json")
 	rootCmd.PersistentFlags().BoolP(
 		"interactive", "i", term.IsTerminal(int(os.Stdout.Fd())),
 		"interactive mode, ask for passwords, display pretty ascii")

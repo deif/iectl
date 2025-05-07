@@ -10,6 +10,7 @@ import (
 	"github.com/deif/iectl/auth"
 	"github.com/deif/iectl/cmd/bsp/service"
 	"github.com/deif/iectl/cmd/bsp/sshkey"
+	"github.com/deif/iectl/target"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -22,53 +23,64 @@ var RootCmd = &cobra.Command{
 		user, _ := cmd.Flags().GetString("username")
 		pass, _ := cmd.Flags().GetString("password")
 
-		host, _ := cmd.Flags().GetString("hostname")
-		if host == "" {
-			return fmt.Errorf("required flag \"hostname\" not set")
+		targets, _ := cmd.Flags().GetStringSlice("target")
+		if len(targets) == 0 {
+			return fmt.Errorf("required flag \"target\" not set")
 		}
-
-		c, err := auth.Client(host, user, pass, insecure)
 
 		interactive, _ := cmd.Flags().GetBool("interactive")
 
-		// If we have a terminal, and the error was invalid credentials
-		// try to fix the issue by asking for another password...
-		if errors.Is(err, auth.ErrInvalidCredentials) && interactive {
-			for {
-				fmt.Printf("Enter password for \"%s\": ", user)
+		collection := target.Collection{}
 
-				var p []byte
-				p, err = readPassword()
-				if err != nil {
-					return fmt.Errorf("unable to ask for password: %w", err)
-				}
+		for _, host := range targets {
+			c, err := auth.Client(host, user, pass, insecure)
 
-				fmt.Println()
-				c, err = auth.Client(host, user, string(p), insecure)
-				if errors.Is(err, auth.ErrInvalidCredentials) {
-					continue
-				}
-				if err != nil {
-					return fmt.Errorf("unable to authenticate: %w", err)
-				}
+			// If we have a terminal, and the error was invalid credentials
+			// try to fix the issue by asking for another password...
+			if errors.Is(err, auth.ErrInvalidCredentials) && interactive {
+				for {
+					fmt.Printf("Enter password for %s@%s: ", user, host)
 
-				break
+					var p []byte
+					p, err = readPassword()
+					if err != nil {
+						return fmt.Errorf("unable to ask for password: %w", err)
+					}
+
+					// we might as well try this newly entered password
+					// on future targets aswell
+					pass = string(p)
+
+					fmt.Println()
+					c, err = auth.Client(host, user, pass, insecure)
+					if errors.Is(err, auth.ErrInvalidCredentials) {
+						continue
+					}
+					if err != nil {
+						return fmt.Errorf("unable to authenticate: %w", err)
+					}
+
+					break
+				}
 			}
+
+			if err != nil {
+				return fmt.Errorf("unable to authenticate: %w", err)
+			}
+
+			collection = append(collection, target.Endpoint{Hostname: host, Client: c})
+
 		}
 
-		if err != nil {
-			return fmt.Errorf("unable to authenticate: %w", err)
-		}
-
-		cmd.SetContext(auth.NewContext(cmd.Context(), c))
+		cmd.SetContext(target.NewContext(cmd.Context(), collection))
 
 		return nil
 	},
 }
 
 func init() {
-	RootCmd.PersistentFlags().StringP("hostname", "t", "", "specify hostname or address to target")
-	RootCmd.MarkPersistentFlagRequired("hostname")
+	RootCmd.PersistentFlags().StringSliceP("target", "t", []string{}, "specify hostname(s) or address(es) to target(s)")
+	RootCmd.MarkPersistentFlagRequired("target")
 
 	RootCmd.PersistentFlags().StringP("username", "u", "admin", "specify username")
 	RootCmd.PersistentFlags().StringP("password", "p", "admin", "specify username")

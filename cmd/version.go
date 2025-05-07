@@ -84,12 +84,16 @@ func checkGithubVersion() {
 
 }
 
+var wingetCommand = []string{"winget", "search", "--exact", "DEIF.iectl"}
+
 func doWindowsThings() {
 	fmt.Println()
 	fmt.Println("Checking winget for updates...")
 	p, err := latestWingetVersion()
 	if err != nil {
-		fmt.Printf("unable to lookup latest iectl version: %s", err)
+		fmt.Printf("unable to lookup latest iectl version: %s\n\n", err)
+		fmt.Printf("Try running winget manually: %s\n", strings.Join(wingetCommand, " "))
+		return
 	}
 
 	if p == version {
@@ -101,7 +105,7 @@ func doWindowsThings() {
 }
 
 func latestWingetVersion() (string, error) {
-	c := exec.Command("winget", "search", "--exact", "DEIF.iectl")
+	c := exec.Command(wingetCommand[0], wingetCommand[1:]...)
 	out, err := c.StdoutPipe()
 	if err != nil {
 		return "", fmt.Errorf("unable to pipe stdout: %w", err)

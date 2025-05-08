@@ -104,7 +104,6 @@ func Listen(ctx context.Context) (chan dns.Msg, error) {
 
 	go func() {
 		<-ctx.Done()
-		log.Printf("Closing mDNS listeners")
 		for _, v := range listeners {
 			err := v.Close()
 			if err != nil {

@@ -45,6 +45,7 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 		for {
 			msg, ok := <-dnsChan
 			if !ok {
+				close(updates)
 				break
 			}
 

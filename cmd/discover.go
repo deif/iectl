@@ -27,7 +27,9 @@ Default: Displays each discovered host only once, writing a new line as new host
 		timeout, _ := cmd.Flags().GetDuration("timeout")
 		ctx := context.Background()
 		if timeout != 0 {
-			ctx, _ = context.WithTimeout(ctx, timeout)
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
 		}
 
 		updates, err := browser.Run(ctx)

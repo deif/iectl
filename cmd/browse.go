@@ -5,13 +5,11 @@ import (
 	"fmt"
 
 	"github.com/deif/iectl/mdns"
+	"github.com/deif/iectl/tui"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/miekg/dns"
-	"github.com/pkg/browser"
+	openBrowser "github.com/pkg/browser"
 	"github.com/spf13/cobra"
 )
 
@@ -39,16 +37,17 @@ var browseCmd = &cobra.Command{
 			return fmt.Errorf("unable to browse mdns: %w", err)
 		}
 
-		items := []list.Item{}
-		m := model{
-			spinner: spinner.New(spinner.WithSpinner(spinner.Meter)),
-			list:    list.New(items, list.NewDefaultDelegate(), 0, 0),
-		}
+		m := tui.BrowserModel(updates)
 
-		m.list.Title = "Devices"
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			return err
+		}
+
+		// m.Selected should now hold whatever the user wanted to open
+		// it may be empty, in case that the user just wanted to quit
+		for _, v := range m.Selected {
+			openBrowser.OpenURL(v.Description())
 		}
 		return nil
 	},
@@ -56,74 +55,4 @@ var browseCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(browseCmd)
-}
-
-func mdnsUpdates() tea.Cmd {
-	return func() tea.Msg {
-		return <-updates
-	}
-}
-
-var (
-	docStyle = lipgloss.NewStyle().Margin(1, 2)
-)
-
-type item interface {
-	Title() string
-	Description() string
-	FilterValue() string
-}
-
-type model struct {
-	list    list.Model
-	spinner spinner.Model
-}
-
-func (m model) Init() tea.Cmd {
-	return tea.Batch(
-		m.spinner.Tick,
-		mdnsUpdates(),
-	)
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
-		}
-		if msg.String() == "enter" {
-			s := m.list.SelectedItem()
-			t, ok := s.(*mdns.Target)
-			if !ok {
-				panic("i dont know how to handle this")
-			}
-
-			browser.OpenURL(t.Description())
-			return m, tea.Quit
-		}
-	case []*mdns.Target:
-		i := make([]list.Item, 0)
-		for _, v := range msg {
-			i = append(i, v)
-		}
-		m.list.SetItems(i)
-		return m, mdnsUpdates()
-	case tea.WindowSizeMsg:
-		h, v := docStyle.GetFrameSize()
-		m.list.SetSize(msg.Width-h, msg.Height-v)
-	case spinner.TickMsg:
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-	}
-
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
-}
-
-func (m model) View() string {
-	m.list.Title = fmt.Sprintf("Looking for devices %s", m.spinner.View())
-	return docStyle.Render(m.list.View())
 }

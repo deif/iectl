@@ -17,6 +17,20 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "General system status",
+	Long: `Prints general system status
+
+Examples:
+  
+  Query a single controller, in human readable form:
+  
+    iectl bsp status \
+      --target iE250-05eb2f.local
+  
+  Query firmware versions of a network of DEIF controllers, with jq:
+  
+    iectl bsp status --target-all \
+      --json | jq ".hostname,.software"
+`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		targets := target.FromContext(cmd.Context())
 		for _, target := range targets {

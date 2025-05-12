@@ -77,22 +77,22 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 
 type Target struct {
 	Hostname string
+
+	Marked bool
 }
 
-func (t Target) Title() string {
-	return t.Hostname
+func (t *Target) Title() string {
+	if !t.Marked {
+		return t.Hostname
+	}
+
+	return fmt.Sprintf(">> %s", t.Hostname)
 }
 
-func (t Target) Description() string {
+func (t *Target) Description() string {
 	return fmt.Sprintf("https://%s/", t.Hostname)
 }
 
-func (t Target) FilterValue() string {
+func (t *Target) FilterValue() string {
 	return t.Hostname
 }
-
-func (t *Target) Update(d dns.RR) {
-	// updating target
-}
-
-//log.Printf("%+v has update %+v", t, d)

@@ -12,7 +12,7 @@ import (
 )
 
 type Browser struct {
-	Question dns.Msg
+	Question dns.Question
 }
 
 func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
@@ -21,9 +21,11 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 		return nil, err
 	}
 
+	queryMsg := dns.Msg{}
+	queryMsg.SetQuestion(b.Question.Name, b.Question.Qtype)
 	go func() {
 		for {
-			err := Query(b.Question)
+			err := Query(queryMsg)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					continue
@@ -48,14 +50,21 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 				close(updates)
 				break
 			}
-
 			for _, a := range msg.Answer {
 				switch answer := a.(type) {
 				case *dns.PTR:
-					q := dns.Msg{}
-					q.SetQuestion(dns.Fqdn(answer.Ptr), dns.TypeSRV)
-					Query(q)
+					for _, v := range msg.Answer {
+						if v.Header().Name == b.Question.Name {
+							q := dns.Msg{}
+							q.SetQuestion(dns.Fqdn(answer.Ptr), dns.TypeSRV)
+							Query(q)
+						}
+					}
 				case *dns.SRV:
+					if !strings.HasSuffix(answer.Header().Name, b.Question.Name) {
+						// We didnt ask for this
+						continue
+					}
 					name := strings.TrimRight(answer.Target, ".")
 					t, exists := index[name]
 					if exists {

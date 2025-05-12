@@ -125,9 +125,8 @@ func targetsFromFlags(cmd *cobra.Command) ([]string, error) {
 }
 
 func firstTarget(timeout time.Duration) ([]string, error) {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn("_base-unit-deif._tcp.local"), dns.TypePTR)
-	browser := mdns.Browser{Question: *msg}
+	q := dns.Question{Name: dns.Fqdn("_base-unit-deif._tcp.local"), Qtype: dns.TypePTR}
+	browser := mdns.Browser{Question: q}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -146,9 +145,8 @@ func firstTarget(timeout time.Duration) ([]string, error) {
 }
 
 func allTargets(timeout time.Duration) ([]string, error) {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn("_base-unit-deif._tcp.local"), dns.TypePTR)
-	browser := mdns.Browser{Question: *msg}
+	q := dns.Question{Name: dns.Fqdn("_base-unit-deif._tcp.local"), Qtype: dns.TypePTR}
+	browser := mdns.Browser{Question: q}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -181,10 +179,9 @@ func allTargets(timeout time.Duration) ([]string, error) {
 }
 
 func browseTargets() ([]string, error) {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn("_base-unit-deif._tcp.local"), dns.TypePTR)
+	q := dns.Question{Name: dns.Fqdn("_base-unit-deif._tcp.local"), Qtype: dns.TypePTR}
 
-	browser := mdns.Browser{Question: *msg}
+	browser := mdns.Browser{Question: q}
 
 	var err error
 	updates, err := browser.Run(context.Background())

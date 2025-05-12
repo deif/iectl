@@ -47,7 +47,10 @@ var browseCmd = &cobra.Command{
 		// m.Selected should now hold whatever the user wanted to open
 		// it may be empty, in case that the user just wanted to quit
 		for _, v := range m.Selected {
-			openBrowser.OpenURL(v.Description())
+			err := openBrowser.OpenURL(v.Description())
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	},

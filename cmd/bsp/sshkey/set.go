@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/deif/iectl/auth"
+	"github.com/deif/iectl/target"
 	"github.com/spf13/cobra"
 )
 
@@ -18,14 +18,6 @@ var setCmd = &cobra.Command{
 	Short: "set ssh public key(s) for the root user",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := auth.FromContext(cmd.Context())
-		host, _ := cmd.Flags().GetString("hostname")
-		u := url.URL{
-			Scheme: "https",
-			Host:   host,
-			Path:   "/bsp/keys/ssh",
-		}
-
 		var keymaterial strings.Builder
 		for _, v := range args {
 			c, err := os.ReadFile(v)
@@ -55,21 +47,29 @@ var setCmd = &cobra.Command{
 			return fmt.Errorf("unable to marshal json payload: %w", err)
 		}
 
-		resp, err := client.Post(u.String(), "application/json", bytes.NewReader(jsonPayload))
-		if err != nil {
-			return fmt.Errorf("unable to http post: %w", err)
-		}
-		defer resp.Body.Close()
+		targets := target.FromContext(cmd.Context())
+		for _, target := range targets {
+			u := url.URL{
+				Scheme: "https",
+				Host:   target.Hostname,
+				Path:   "/bsp/keys/ssh",
+			}
 
-		switch resp.StatusCode {
-		case http.StatusOK:
-		case http.StatusAccepted:
-		case http.StatusBadRequest:
-			return fmt.Errorf("bad SSH key, server responded with 400 Bad Request")
-		default:
-			return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
-		}
+			resp, err := target.Client.Post(u.String(), "application/json", bytes.NewReader(jsonPayload))
+			if err != nil {
+				return fmt.Errorf("%s: unable to http post: %w", target.Hostname, err)
+			}
+			defer resp.Body.Close()
 
+			switch resp.StatusCode {
+			case http.StatusOK:
+			case http.StatusAccepted:
+			case http.StatusBadRequest:
+				return fmt.Errorf("%s: bad SSH key, server responded with 400 Bad Request", target.Hostname)
+			default:
+				return fmt.Errorf("%s: unexpected statuscode: %d", target.Hostname, resp.StatusCode)
+			}
+		}
 		return nil
 	},
 }

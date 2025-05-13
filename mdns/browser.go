@@ -24,6 +24,8 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 	queryMsg := dns.Msg{}
 	queryMsg.SetQuestion(b.Question.Name, b.Question.Qtype)
 	go func() {
+		timer := time.NewTimer(time.Second)
+		round := 1
 		for {
 			err := Query(queryMsg)
 			if err != nil {
@@ -34,8 +36,17 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 				panic(err) // FIXME: not optimal
 			}
 
-			// FIXME: should backoff exponentially
-			time.Sleep(time.Second * 1)
+			timer.Reset(expDuration(round))
+			round++
+
+			// Wait until the timer fires or the context is cancelled
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				continue
+			}
+
 		}
 	}()
 
@@ -82,6 +93,22 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 	}()
 
 	return updates, nil
+}
+
+// expDuration targets a sequence like
+// 1s 2s 4s 8s 16s 32s 1m 1m 1m 1m 1m
+func expDuration(i int) time.Duration {
+	if i > 6 {
+		return time.Minute
+	}
+
+	backoff := time.Second * (1 << i)
+	if backoff > time.Minute {
+		backoff = time.Minute
+	}
+
+	return backoff
+
 }
 
 type Target struct {

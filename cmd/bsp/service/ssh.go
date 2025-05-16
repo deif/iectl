@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/deif/iectl/auth"
+	"github.com/deif/iectl/target"
 	"github.com/spf13/cobra"
 )
 
@@ -24,50 +24,50 @@ var sshCmd = &cobra.Command{
 			return getSshStatus(cmd, args)
 		}
 
-		client := auth.FromContext(cmd.Context())
-		host, _ := cmd.Flags().GetString("hostname")
-		u := url.URL{
-			Scheme: "https",
-			Host:   host,
-			Path:   "/bsp/service/ssh",
-		}
+		targets := target.FromContext(cmd.Context())
+		for _, target := range targets {
+			u := url.URL{
+				Scheme: "https",
+				Host:   target.Hostname,
+				Path:   "/bsp/service/ssh",
+			}
 
-		var enable bool
-		if args[0] == "enable" {
-			enable = true
-		}
+			var enable bool
+			if args[0] == "enable" {
+				enable = true
+			}
 
-		reqStruct := struct {
-			Running bool `json:"running"`
-		}{
-			Running: enable,
-		}
+			reqStruct := struct {
+				Running bool `json:"running"`
+			}{
+				Running: enable,
+			}
 
-		body, err := json.Marshal(reqStruct)
-		if err != nil {
-			return fmt.Errorf("unable to marshal request body: %w", err)
-		}
+			body, err := json.Marshal(reqStruct)
+			if err != nil {
+				return fmt.Errorf("%s: unable to marshal request body: %w", target.Hostname, err)
+			}
 
-		req, err := http.NewRequest("PUT", u.String(), bytes.NewReader(body))
-		if err != nil {
-			return fmt.Errorf("unable to create http put request: %w", err)
-		}
+			req, err := http.NewRequest("PUT", u.String(), bytes.NewReader(body))
+			if err != nil {
+				return fmt.Errorf("%s: unable to create http put request: %w", target.Hostname, err)
+			}
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("unable to http post: %w", err)
-		}
-		defer resp.Body.Close()
+			resp, err := target.Client.Do(req)
+			if err != nil {
+				return fmt.Errorf("%s: unable to http post: %w", target.Hostname, err)
+			}
+			defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("%s: unexpected http status code: %d", target.Hostname, resp.StatusCode)
+			}
+			asJson, _ := cmd.Flags().GetBool("json")
+			if !asJson {
+				fmt.Printf("%s: 200 OK", target.Hostname)
+				fmt.Println()
+			}
 		}
-		asJson, _ := cmd.Flags().GetBool("json")
-		if !asJson {
-			fmt.Println("Device answers: 200 OK")
-		}
-
-		// nothing for --json. users must deal with the exit code of iecli
 		return nil
 	},
 }
@@ -76,51 +76,52 @@ func init() {
 	RootCmd.AddCommand(sshCmd)
 }
 
-func getSshStatus(cmd *cobra.Command, args []string) error {
-	client := auth.FromContext(cmd.Context())
-	host, _ := cmd.Flags().GetString("hostname")
-	u := url.URL{
-		Scheme: "https",
-		Host:   host,
-		Path:   "/bsp/service/ssh",
-	}
-
-	resp, err := client.Get(u.String())
-	if err != nil {
-		return fmt.Errorf("unable to http get: %w", err)
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-	default:
-		return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
-	}
-
-	asJson, _ := cmd.Flags().GetBool("json")
-	if asJson {
-		_, err = io.Copy(os.Stdout, resp.Body)
-		if err != nil {
-			return fmt.Errorf("unable to copy to stdout: %w", err)
+func getSshStatus(cmd *cobra.Command, _ []string) error {
+	targets := target.FromContext(cmd.Context())
+	for _, target := range targets {
+		u := url.URL{
+			Scheme: "https",
+			Host:   target.Hostname,
+			Path:   "/bsp/service/ssh",
 		}
-		return nil
+
+		resp, err := target.Client.Get(u.String())
+		if err != nil {
+			return fmt.Errorf("%s: unable to http get: %w", target.Hostname, err)
+		}
+		defer resp.Body.Close()
+
+		switch resp.StatusCode {
+		case http.StatusOK:
+		default:
+			return fmt.Errorf("%s: unexpected statuscode: %d", target.Hostname, resp.StatusCode)
+		}
+
+		asJson, _ := cmd.Flags().GetBool("json")
+		if asJson {
+			_, err = io.Copy(os.Stdout, resp.Body)
+			if err != nil {
+				return fmt.Errorf("%s: unable to copy to stdout: %w", target.Hostname, err)
+			}
+			return nil
+		}
+
+		dec := json.NewDecoder(resp.Body)
+		response := &struct {
+			Running bool `json:"running"`
+		}{}
+
+		err = dec.Decode(response)
+		if err != nil {
+			return fmt.Errorf("%s: unable to unmarshal response: %w", target.Hostname, err)
+		}
+
+		if response.Running {
+			fmt.Printf("%s: SSH Service: enabled", target.Hostname)
+		} else {
+			fmt.Printf("%s: SSH Service: disabled", target.Hostname)
+		}
+		fmt.Println()
 	}
-
-	dec := json.NewDecoder(resp.Body)
-	response := &struct {
-		Running bool `json:"running"`
-	}{}
-
-	err = dec.Decode(response)
-	if err != nil {
-		return fmt.Errorf("unable to unmarshal response: %w", err)
-	}
-
-	if response.Running {
-		fmt.Println("SSH Service: enabled")
-	} else {
-		fmt.Println("SSH Service: disabled")
-	}
-
 	return nil
 }

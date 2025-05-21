@@ -14,6 +14,7 @@ import (
 	"github.com/deif/iectl/auth"
 	"github.com/deif/iectl/cmd/bsp/service"
 	"github.com/deif/iectl/cmd/bsp/sshkey"
+	"github.com/deif/iectl/cmd/bsp/debug"
 	"github.com/deif/iectl/mdns"
 	"github.com/deif/iectl/target"
 	"github.com/deif/iectl/tui"
@@ -217,6 +218,7 @@ func init() {
 	RootCmd.PersistentFlags().Bool("insecure", false, "do not verify connection certificates")
 	RootCmd.AddCommand(service.RootCmd)
 	RootCmd.AddCommand(sshkey.RootCmd)
+	RootCmd.AddCommand(debug.RootCmd)
 }
 
 func readPassword() ([]byte, error) {

@@ -27,6 +27,14 @@ func getBody(args []string) string {
 	return body
 }
 
+func addPrefixIfMissing(s string, prefix string) string {
+	if !strings.HasPrefix(s, prefix) {
+		return prefix + s
+	} else {
+		return s
+	}
+}
+
 var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Compose GET request",
@@ -49,11 +57,23 @@ var getCmd = &cobra.Command{
 		interactive, _ := cmd.Flags().GetBool("interactive")
 
 		path := args[0]
-		u := url.URL{
-			Scheme: "https",
-			Host:   target.Hostname,
-			Path:   "/bsp/" + path,
+		addPrefixIfMissing(path, "/")
+		addPrefixIfMissing(path, "/bsp")
+		if !strings.HasPrefix(path, "/") {
+			path = "/" + path
 		}
+		if !strings.HasPrefix(path, "/bsp") {
+			path = "/bsp" + path
+		}
+
+		urlString := "https://" + target.Hostname + path
+		u, err := url.Parse(urlString)
+		if err != nil {
+			return fmt.Errorf("URL could not be parsed, reason %w", err)
+		}
+
+		fmt.Println(u.String())
+		fmt.Println(u.RawQuery)
 
 		req, err := http.NewRequest("GET", u.String(), bytes.NewReader([]byte(reqBody)))
 		if err != nil {

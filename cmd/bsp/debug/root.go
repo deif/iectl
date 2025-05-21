@@ -35,14 +35,19 @@ func addPrefixIfMissing(s string, prefix string) string {
 	}
 }
 
+var (
+	httpMethod string
+	path       string
+	interactive bool
+)
+
 func exec_method(method string, cmd *cobra.Command, args []string) error {
+	httpMethod = method
 	targets := target.FromContext(cmd.Context())
 	if len(targets) > 1 {
 		return fmt.Errorf("refusing to debug request with more than 1 target")
 	}
 	target := targets[0]
-
-	quiet := false
 
 	if len(args) == 0 {
 		return fmt.Errorf("missing required argument path")
@@ -50,9 +55,9 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 
 	reqBody := getBody(args[1:])
 
-	interactive, _ := cmd.Flags().GetBool("interactive")
+	interactive, _ = cmd.Flags().GetBool("interactive")
 
-	path := args[0]
+	path = args[0]
 	addPrefixIfMissing(path, "/")
 	addPrefixIfMissing(path, "/bsp")
 	if !strings.HasPrefix(path, "/") {
@@ -82,12 +87,14 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 	}
 	defer resp.Body.Close()
 
-	if !quiet {
-		fmt.Printf("Request %s to %s completed.\n", method, path)
-	}
+	return formatOutput(resp)
+}
+
+func formatOutput(resp *http.Response) error {
 
 	showBody := true
 	if interactive {
+		fmt.Printf("Request %s to %s completed with status code %d.\n", httpMethod, path, resp.StatusCode)
 		if resp.Header.Get("Content-Type") == "application/zip" {
 			fmt.Println("Response indicates a binary Content-Type, do you still want to print it? [y/N]")
 			var ans string
@@ -96,10 +103,13 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 				showBody = false
 			}
 		}
+	} else {
+		fmt.Printf("statusCode: %d\n", resp.StatusCode)
+		fmt.Print("body: ")
 	}
-
-	fmt.Println("status-code: ", resp.StatusCode)
-	fmt.Print("body: ")
+	if interactive && resp.Header.Get("Content-Length") == "0" {
+		return nil
+	}
 	if showBody {
 		_, err := io.Copy(os.Stdout, resp.Body)
 		if err != nil {
@@ -108,7 +118,6 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("<binary data, Content-Length %s>", resp.Header.Get("Content-Type"))
 	}
-
 	return nil
 }
 

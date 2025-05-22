@@ -19,6 +19,14 @@ var RootCmd = &cobra.Command{
 	Use:    "debug",
 	Hidden: true,
 	Short:  "Generic methods for composing nonspecific HTTP requests for testing and debugging.",
+	Long: `Do a single HTTP request (GET, POST, PUT, or DELETE) of specified method to an endpoint with optional additional request body or query parameters.
+Handling of request and response content is minimal. Primarily intended for debugging and testing of REST endpoints during development.
+
+Example usages:
+- iectl bsp --target iE250-05eb2f.local debug get /hostname
+- iectl bsp --target iE250-05eb2f.local debug post /service/ssh '{"running": false}' --header
+- iectl bsp --target iE250-05eb2f.local debug get "/system/log?limit=5"
+`,
 }
 
 func getBody(args []string) string {
@@ -119,6 +127,7 @@ func formatOutput(resp *http.Response) error {
 
 var getCmd = &cobra.Command{
 	Use:   "get",
+	Aliases: []string{"GET"},
 	Short: "Compose GET request",
 	Args:  cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -127,6 +136,7 @@ var getCmd = &cobra.Command{
 }
 var postCmd = &cobra.Command{
 	Use:   "post",
+	Aliases: []string{"POST"},
 	Short: "Compose POST request",
 	Args:  cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -135,6 +145,7 @@ var postCmd = &cobra.Command{
 }
 var putCmd = &cobra.Command{
 	Use:   "put",
+	Aliases: []string{"PUT"},
 	Short: "Compose PUT request",
 	Args:  cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -143,6 +154,7 @@ var putCmd = &cobra.Command{
 }
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
+	Aliases: []string{"DELETE"},
 	Short: "Compose DELETE request",
 	Args:  cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

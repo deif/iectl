@@ -20,7 +20,7 @@ var RootCmd = &cobra.Command{
 	Hidden: true,
 	Short:  "Generic methods for composing nonspecific HTTP requests for testing and debugging.",
 	Long: `Do a single HTTP request (GET, POST, PUT, or DELETE) of specified method to an endpoint with optional additional request body or query parameters.
-Handling of request and response content is minimal. Primarily intended for debugging and testing of REST endpoints during development.
+Handling of request and response content is minimal. Multi-target mode is _not_ supported. Primarily intended for debugging and testing of REST endpoints during development.
 
 Example usages:
 - iectl bsp --target iE250-05eb2f.local debug get /hostname

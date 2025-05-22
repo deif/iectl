@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 
 	"github.com/deif/iectl/target"
@@ -36,9 +37,11 @@ func addPrefixIfMissing(s string, prefix string) string {
 }
 
 var (
-	httpMethod string
-	path       string
-	interactive bool
+	httpMethod   string
+	path         string
+	interactive  bool
+	printHeader  bool
+	noWarnBinary bool
 )
 
 func exec_method(method string, cmd *cobra.Command, args []string) error {
@@ -73,9 +76,6 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("URL could not be parsed, reason %w", err)
 	}
 
-	fmt.Println(u.String())
-	fmt.Println(u.RawQuery)
-
 	req, err := http.NewRequest(method, u.String(), bytes.NewReader([]byte(reqBody)))
 	if err != nil {
 		return fmt.Errorf("unable to create http request: %w", err)
@@ -91,25 +91,20 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 }
 
 func formatOutput(resp *http.Response) error {
-
 	showBody := true
-	if interactive {
-		fmt.Printf("Request %s to %s completed with status code %d.\n", httpMethod, path, resp.StatusCode)
-		if resp.Header.Get("Content-Type") == "application/zip" {
-			fmt.Println("Response indicates a binary Content-Type, do you still want to print it? [y/N]")
-			var ans string
-			fmt.Scanln(&ans)
-			if !strings.HasPrefix(strings.ToLower(ans), "y") {
-				showBody = false
-			}
+	if interactive && !noWarnBinary && resp.Header.Get("Content-Type") == "application/zip" {
+		fmt.Println("Response indicates a binary Content-Type, do you still want to print it? [y/N]")
+		var ans string
+		fmt.Scanln(&ans)
+		if !strings.HasPrefix(strings.ToLower(ans), "y") {
+			showBody = false
 		}
-	} else {
-		fmt.Printf("statusCode: %d\n", resp.StatusCode)
-		fmt.Print("body: ")
 	}
-	if interactive && resp.Header.Get("Content-Length") == "0" {
-		return nil
+	head, err := httputil.DumpResponse(resp, false)
+	if err != nil {
+		return fmt.Errorf("malformed HTTP response: %w", err)
 	}
+	fmt.Printf("%s", head)
 	if showBody {
 		_, err := io.Copy(os.Stdout, resp.Body)
 		if err != nil {
@@ -155,6 +150,8 @@ var deleteCmd = &cobra.Command{
 }
 
 func init() {
+	RootCmd.Flags().BoolVar(&printHeader, "header", false, "If true, print HTTP headers of response.")
+	RootCmd.Flags().BoolVar(&noWarnBinary, "no-warn-binary", false, "If false and in interactive mode, do not warn about http response containing binary data.")
 	RootCmd.AddCommand(getCmd)
 	RootCmd.AddCommand(postCmd)
 	RootCmd.AddCommand(putCmd)

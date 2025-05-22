@@ -16,8 +16,9 @@ import (
 )
 
 var RootCmd = &cobra.Command{
-	Use:   "debug",
-	Short: "Generic methods for composing nonspecific HTTP requests for testing and debugging.",
+	Use:    "debug",
+	Hidden: true,
+	Short:  "Generic methods for composing nonspecific HTTP requests for testing and debugging.",
 }
 
 func getBody(args []string) string {

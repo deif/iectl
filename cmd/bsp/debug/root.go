@@ -46,7 +46,6 @@ func addPrefixIfMissing(s string, prefix string) string {
 }
 
 var (
-	httpMethod   string
 	path         string
 	interactive  bool
 	printHeader  bool
@@ -54,7 +53,6 @@ var (
 )
 
 func exec_method(method string, cmd *cobra.Command, args []string) error {
-	httpMethod = method
 	targets := target.FromContext(cmd.Context())
 	if len(targets) > 1 {
 		return fmt.Errorf("refusing to debug request with more than 1 target")
@@ -120,7 +118,7 @@ func formatOutput(resp *http.Response) error {
 			return fmt.Errorf("error reading http response: %w", err)
 		}
 	} else {
-		fmt.Printf("<binary data, Content-Length %s>", resp.Header.Get("Content-Type"))
+		fmt.Printf("<binary data of type %s, length %s>", resp.Header.Get("Content-Type"), resp.Header.Get("Content-Length"))
 	}
 	return nil
 }

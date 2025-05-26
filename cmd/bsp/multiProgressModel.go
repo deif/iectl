@@ -1,0 +1,137 @@
+package bsp
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/charmbracelet/bubbles/progress"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+const (
+	maxWidth = 60
+)
+
+var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render
+var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff6262")).Render
+
+type hostProgress struct {
+	name     string
+	status   string
+	err      string
+	progress *progress.Model
+}
+
+type multiProgressModel struct {
+	hosts     map[string]*hostProgress
+	hostOrder []string
+}
+
+type hostUpdate struct {
+	progress progressMsg
+	host     string
+}
+
+func multiProgressModelWithTargets(t []*firmwareTarget) (*multiProgressModel, error) {
+	mpModel := &multiProgressModel{hosts: make(map[string]*hostProgress)}
+	var keys []string
+	for _, v := range t {
+		keys = append(keys, v.Hostname)
+		_, exists := mpModel.hosts[v.Hostname]
+		if exists {
+			return nil, fmt.Errorf("%s is not unique", v.Hostname)
+		}
+		p := progress.New(progress.WithDefaultGradient())
+
+		mpModel.hosts[v.Hostname] = &hostProgress{
+			name:     v.Hostname,
+			status:   "Queued...",
+			progress: &p,
+		}
+	}
+
+	sort.Strings(keys)
+	mpModel.hostOrder = keys
+
+	return mpModel, nil
+}
+
+func (m *multiProgressModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		return m, tea.Quit
+
+	case tea.WindowSizeMsg:
+		for _, v := range m.hosts {
+			v.progress.Width = msg.Width
+			if v.progress.Width > maxWidth {
+				v.progress.Width = maxWidth
+			}
+		}
+		return m, nil
+
+	case hostUpdate:
+		if msg.progress.err != "" {
+			m.hosts[msg.host].err = msg.progress.err
+			return m, nil
+		}
+
+		m.hosts[msg.host].status = msg.progress.status
+		return m, m.hosts[msg.host].progress.SetPercent(msg.progress.ratio)
+
+	// FrameMsg is sent when the progress bar wants to animate itself
+	case progress.FrameMsg:
+		cmds := make([]tea.Cmd, 0)
+
+		for i := range m.hosts {
+			prog, cmd := m.hosts[i].progress.Update(msg)
+			progModel := prog.(progress.Model)
+			m.hosts[i].progress = &progModel
+			cmds = append(cmds, cmd)
+		}
+
+		return m, tea.Batch(cmds...)
+
+	default:
+		return m, nil
+	}
+}
+
+const hostnamePad = 18
+
+func (m *multiProgressModel) View() string {
+	view := "Uploading firmware..." + "\n\n"
+	var h *hostProgress
+	for _, v := range m.hostOrder {
+		h = m.hosts[v]
+
+		view += FormatHostname(h.name, hostnamePad) + " " + h.progress.View() + "\n" +
+			strings.Repeat(" ", hostnamePad+1)
+
+		if h.err != "" {
+			view += errorStyle(h.err)
+
+		} else {
+			view += helpStyle(h.status)
+		}
+
+		view += "\n\n"
+	}
+	return view
+}
+
+func FormatHostname(text string, maxLen int) string {
+	if len(text) == maxLen {
+		return text
+	}
+	if len(text) < maxLen {
+		return strings.Repeat(" ", maxLen-len(text)) + text
+	}
+	return "..." + text[len(text)-maxLen+3:]
+}

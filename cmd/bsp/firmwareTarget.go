@@ -156,36 +156,27 @@ func (f *firmwareTarget) LoadFirmware(ctx context.Context, rateLimit rate.Limit)
 
 	var eGroup errgroup.Group
 	eGroup.Go(func() error {
-		_, err := io.Copy(pWrite, f.fd)
-		if err != nil {
-			return err
-		}
+		_, copyError := io.Copy(pWrite, f.fd)
 
 		// close multipart writer
-		err = mp.Close()
-		if err != nil {
-			return err
-		}
+		mp.Close()
 
 		// close pipe
-		err = w.Close()
-		if err != nil {
-			return err
-		}
+		w.Close()
 
 		// close file
-		err = f.fd.Close()
-		if err != nil {
-			return err
+		f.fd.Close()
+
+		if copyError != nil {
+			f.LoadProgress <- progressMsg{err: fmt.Sprintf("Failed: %s", copyError), ratio: 0.0}
+		} else {
+			f.LoadProgress <- progressMsg{status: "Successfully uploaded file", ratio: 1.0}
 		}
 
 		// close the progress writer
-		err = progress.Close()
-		if err != nil {
-			return err
-		}
+		progress.Close()
 
-		return nil
+		return copyError
 	})
 
 	u := url.URL{

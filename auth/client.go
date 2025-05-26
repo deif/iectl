@@ -2,26 +2,48 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"time"
 )
+
+type timeoutConn struct {
+	net.Conn
+	writeTimeout time.Duration
+}
+
+func (c *timeoutConn) Write(b []byte) (int, error) {
+	c.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	return c.Conn.Write(b)
+}
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
 func Client(host, user, pass string, insecure bool) (*http.Client, error) {
-	c := &http.Client{}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := (&net.Dialer{Timeout: time.Minute}).DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			return &timeoutConn{
+				Conn:         conn,
+				writeTimeout: time.Minute,
+			}, nil
+		},
+	}
 
 	if insecure {
-		c = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-		}
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
+
+	c := &http.Client{Transport: transport}
 
 	u := url.URL{
 		Scheme: "https",

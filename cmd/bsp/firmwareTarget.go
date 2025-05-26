@@ -24,9 +24,10 @@ type progressWriter2 struct {
 	sync.RWMutex
 	channel chan progressMsg
 
-	written     int
-	lastWritten int
-	total       int64
+	written         int
+	lastWritten     int
+	lastWrittenTime time.Time
+	total           int64
 
 	limiter          *rate.Limiter
 	stallTimer       *time.Timer
@@ -48,8 +49,12 @@ func (p *progressWriter2) Initialize() {
 			if p.limiter.Allow() {
 				p.RLock()
 				msg := progressMsg{
-					ratio:  float64(p.written) / float64(p.total),
-					status: fmt.Sprintf("%s of %s (stalled)", humanize.Bytes(uint64(p.written)), humanize.Bytes(uint64(p.total))),
+					ratio: float64(p.written) / float64(p.total),
+					status: fmt.Sprintf("%s of %s (stalled, timeout in %s)",
+						humanize.Bytes(uint64(p.written)),
+						humanize.Bytes(uint64(p.total)),
+						(60*time.Second - time.Now().Sub(p.lastWrittenTime)).Truncate(time.Second),
+					),
 				}
 				p.RUnlock()
 
@@ -65,8 +70,11 @@ func (p *progressWriter2) Initialize() {
 func (p *progressWriter2) Write(in []byte) (int, error) {
 	p.Lock()
 	defer p.Unlock()
-	p.stallTimer.Reset(time.Second)
+
+	p.lastWrittenTime = time.Now()
 	p.written += len(in)
+	p.stallTimer.Reset(time.Second)
+
 	if p.limiter.Allow() {
 		rate := (p.written - p.lastWritten) * int(p.limiter.Limit())
 		p.channel <- progressMsg{

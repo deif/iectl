@@ -43,6 +43,10 @@ var firmwareCmd = &cobra.Command{
 		}
 		fd.Close()
 
+		// if we reached this far - there should be no need to print out usage
+		// to the user on errors - just display the ui and the error
+		cmd.SilenceUsage = true
+
 		targets := target.FromContext(cmd.Context())
 		firmwareTargets := make([]*firmwareTarget, 0, len(targets))
 		for _, t := range targets {
@@ -64,9 +68,16 @@ var firmwareCmd = &cobra.Command{
 			return fmt.Errorf("unable to initialize ui: %w", err)
 		}
 
+		// This context and cancel func is used to cancel the next few operations
+		operationContext, operationCancel := context.WithCancel(context.Background())
+		defer operationCancel()
+
 		var uiGroup errgroup.Group
 		ui := tea.NewProgram(m)
 		uiGroup.Go(func() error {
+			// when the ui quits, cancel whatever we are doing
+			defer operationCancel()
+
 			if _, err := ui.Run(); err != nil {
 				return fmt.Errorf("ui failed: %w", err)
 			}
@@ -92,7 +103,7 @@ var firmwareCmd = &cobra.Command{
 				}()
 
 				// block here until the firmware is uploaded
-				err := v.LoadFirmware(context.Background(), 3)
+				err := v.LoadFirmware(operationContext, 3)
 
 				wg.Wait() // we have to wait until the ui feeder has emptied the
 				// progress channel and sent it to the ui, otherwise
@@ -105,11 +116,8 @@ var firmwareCmd = &cobra.Command{
 		operationError := loadGroup.Wait()
 		if operationError != nil {
 			ui.Quit()
-			err = uiGroup.Wait()
 
-			operationError = errors.Join(operationError, err)
-
-			return operationError
+			return errors.Join(operationError, uiGroup.Wait())
 		}
 
 		// well, we are here, all controllers have the file uploaded
@@ -136,7 +144,7 @@ var firmwareCmd = &cobra.Command{
 				ui.Send(hostUpdate{progressMsg{ratio: 0.1, status: "Connecting"}, v.Hostname})
 
 				// block here until the firmware is uploaded
-				err := v.ApplyFirmware(context.Background(), 1)
+				err := v.ApplyFirmware(operationContext, 1)
 				wg.Wait()
 
 				return err

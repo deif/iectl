@@ -256,6 +256,7 @@ func (f *firmwareTarget) ApplyFirmware(ctx context.Context, rateLimit rate.Limit
 		select {
 		case <-ctx.Done():
 			t.Stop()
+			close(f.ApplyProgress)
 			return ctx.Err()
 		case <-t.C:
 		}

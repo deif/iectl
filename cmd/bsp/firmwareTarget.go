@@ -36,6 +36,9 @@ type progressWriter2 struct {
 
 func (p *progressWriter2) Initialize() {
 	p.stallTimer = time.NewTimer(time.Second)
+	p.stallTimer.Stop() // the timer should remain stopped
+	// until the first write call have returned.
+
 	p.stopStallRoutine = make(chan struct{})
 
 	go func() {

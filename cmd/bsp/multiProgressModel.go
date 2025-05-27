@@ -127,7 +127,7 @@ func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 const hostnamePad = 18
 
 func (m *multiProgressModel) View() string {
-	view := "Uploading firmware..." + "\n\n"
+	view := "Installing firmware..." + "\n\n"
 	var h *hostProgress
 	for _, v := range m.hostOrder {
 		h = m.hosts[v]

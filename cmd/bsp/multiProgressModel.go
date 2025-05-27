@@ -65,7 +65,11 @@ func (m *multiProgressModel) Init() tea.Cmd {
 func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		return m, tea.Quit
+		switch {
+		case msg.Type == tea.KeyCtrlC:
+			return m, tea.Quit
+		}
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		for _, v := range m.hosts {

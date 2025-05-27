@@ -277,6 +277,7 @@ func (f *firmwareTarget) ApplyFirmware(ctx context.Context, rateLimit rate.Limit
 		case http.StatusAccepted:
 		case http.StatusCreated:
 			resp.Body.Close()
+			f.ApplyProgress <- progressMsg{ratio: 1.0, status: "Successfully installed firmware."}
 			close(f.ApplyProgress)
 
 			return nil

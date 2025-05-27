@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/deif/iectl/target"
@@ -77,10 +78,13 @@ var firmwareCmd = &cobra.Command{
 		for _, v := range firmwareTargets {
 			loadGroup.Go(func() error {
 				// feed status updates to ui
+				var wg sync.WaitGroup
+				wg.Add(1)
 				go func() error {
 					for {
 						p, open := <-v.LoadProgress
 						if !open {
+							wg.Done()
 							return nil
 						}
 						ui.Send(hostUpdate{p, v.Hostname})
@@ -88,9 +92,14 @@ var firmwareCmd = &cobra.Command{
 				}()
 
 				// block here until the firmware is uploaded
-				return v.LoadFirmware(context.Background(), 3)
-			})
+				err := v.LoadFirmware(context.Background(), 3)
 
+				wg.Wait() // we have to wait until the ui feeder has emptied the
+				// progress channel and sent it to the ui, otherwise
+				// the ui will not properly show relevant information
+
+				return err
+			})
 		}
 
 		operationError := loadGroup.Wait()
@@ -105,8 +114,38 @@ var firmwareCmd = &cobra.Command{
 
 		// well, we are here, all controllers have the file uploaded
 
+		for _, v := range firmwareTargets {
+			// reset progress
+			ui.Send(hostUpdate{progressMsg{ratio: 0.0, status: "Queued..."}, v.Hostname})
+
+			loadGroup.Go(func() error {
+				// once again, feed status into ui
+				var wg sync.WaitGroup
+				wg.Add(1)
+				go func() error {
+					for {
+						p, open := <-v.ApplyProgress
+						if !open {
+							wg.Done()
+							return nil
+						}
+						ui.Send(hostUpdate{p, v.Hostname})
+					}
+				}()
+
+				ui.Send(hostUpdate{progressMsg{ratio: 0.1, status: "Connecting"}, v.Hostname})
+
+				// block here until the firmware is uploaded
+				err := v.ApplyFirmware(context.Background(), 1)
+				wg.Wait()
+
+				return err
+			})
+		}
+
+		operationError = loadGroup.Wait()
+
 		ui.Quit()
-		err = uiGroup.Wait()
-		return nil
+		return errors.Join(operationError, uiGroup.Wait())
 	},
 }

@@ -81,6 +81,7 @@ var firmwareCmd = &cobra.Command{
 			if _, err := ui.Run(); err != nil {
 				return fmt.Errorf("ui failed: %w", err)
 			}
+
 			return nil
 		})
 
@@ -98,6 +99,7 @@ var firmwareCmd = &cobra.Command{
 							wg.Done()
 							return nil
 						}
+
 						ui.Send(hostUpdate{p, v.Hostname})
 					}
 				}()
@@ -137,6 +139,7 @@ var firmwareCmd = &cobra.Command{
 							wg.Done()
 							return nil
 						}
+
 						ui.Send(hostUpdate{p, v.Hostname})
 					}
 				}()
@@ -153,7 +156,9 @@ var firmwareCmd = &cobra.Command{
 
 		operationError = loadGroup.Wait()
 
-		ui.Quit()
+		// ...PleaseQuit will shutdown the ui once animations have finished
+		ui.Send(multiProgressModelPleaseQuit{})
+
 		return errors.Join(operationError, uiGroup.Wait())
 	},
 }

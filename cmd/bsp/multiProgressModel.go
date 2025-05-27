@@ -27,7 +27,11 @@ type hostProgress struct {
 type multiProgressModel struct {
 	hosts     map[string]*hostProgress
 	hostOrder []string
+
+	quitting bool
 }
+
+type multiProgressModelPleaseQuit struct{}
 
 type hostUpdate struct {
 	progress progressMsg
@@ -80,6 +84,10 @@ func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case multiProgressModelPleaseQuit:
+		m.quitting = true
+		return m, nil
+
 	case hostUpdate:
 		if msg.progress.err != "" {
 			m.hosts[msg.host].err = msg.progress.err
@@ -92,12 +100,21 @@ func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// FrameMsg is sent when the progress bar wants to animate itself
 	case progress.FrameMsg:
 		cmds := make([]tea.Cmd, 0)
-
+		var animating bool
 		for i := range m.hosts {
 			prog, cmd := m.hosts[i].progress.Update(msg)
 			progModel := prog.(progress.Model)
+
+			if progModel.IsAnimating() {
+				animating = true
+			}
+
 			m.hosts[i].progress = &progModel
 			cmds = append(cmds, cmd)
+		}
+
+		if m.quitting && !animating {
+			return m, tea.Quit
 		}
 
 		return m, tea.Batch(cmds...)
@@ -115,7 +132,7 @@ func (m *multiProgressModel) View() string {
 	for _, v := range m.hostOrder {
 		h = m.hosts[v]
 
-		view += FormatHostname(h.name, hostnamePad) + " " + h.progress.View() + "\n" +
+		view += formatHostname(h.name, hostnamePad) + " " + h.progress.View() + "\n" +
 			strings.Repeat(" ", hostnamePad+1)
 
 		if h.err != "" {
@@ -129,8 +146,7 @@ func (m *multiProgressModel) View() string {
 	}
 	return view
 }
-
-func FormatHostname(text string, maxLen int) string {
+func formatHostname(text string, maxLen int) string {
 	if len(text) == maxLen {
 		return text
 	}

@@ -18,7 +18,7 @@ var (
 )
 
 func init() {
-	firmwareCmd.Flags().IntVar(&maxConcurrency, "concurrency-limit", 10, "limit number of concurrent tasks")
+	firmwareCmd.Flags().IntVar(&maxConcurrency, "concurrency-limit", 5, "limit number of concurrent tasks")
 	RootCmd.AddCommand(firmwareCmd)
 }
 

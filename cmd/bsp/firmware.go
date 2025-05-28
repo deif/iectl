@@ -125,9 +125,10 @@ var firmwareCmd = &cobra.Command{
 		// well, we are here, all controllers have the file uploaded
 
 		for _, v := range firmwareTargets {
-			// reset progress
 			ui.Send(hostUpdate{progressMsg{ratio: 0.0, status: "Queued..."}, v.Hostname})
+		}
 
+		for _, v := range firmwareTargets {
 			loadGroup.Go(func() error {
 				// once again, feed status into ui
 				var wg sync.WaitGroup

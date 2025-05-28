@@ -47,7 +47,7 @@ func multiProgressModelWithTargets(t []*firmwareTarget) (*multiProgressModel, er
 		if exists {
 			return nil, fmt.Errorf("%s is not unique", v.Hostname)
 		}
-		p := progress.New(progress.WithDefaultGradient())
+		p := progress.New(progress.WithGradient("#004637", "#12bc00"))
 
 		mpModel.hosts[v.Hostname] = &hostProgress{
 			name:     v.Hostname,

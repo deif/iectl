@@ -97,9 +97,23 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 	return formatOutput(resp)
 }
 
+func is_binary_mime_best_effort(mime string) bool {
+	for _, exact := range [...]string{"application/zip", "application/octet-stream", "application/pdf"} {
+		if exact == mime {
+			return true
+		}
+	}
+	for _, prefix := range [...]string{"image/", "audio/", "video/"} {
+		if strings.HasPrefix(mime, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func formatOutput(resp *http.Response) error {
 	showBody := true
-	if interactive && !noWarnBinary && resp.Header.Get("Content-Type") == "application/zip" {
+	if interactive && !noWarnBinary && is_binary_mime_best_effort(resp.Header.Get("Content-Type")) {
 		fmt.Println("Response indicates a binary Content-Type, do you still want to print it? [y/N]")
 		var ans string
 		fmt.Scanln(&ans)
@@ -124,37 +138,37 @@ func formatOutput(resp *http.Response) error {
 }
 
 var getCmd = &cobra.Command{
-	Use:   "get",
+	Use:     "get",
 	Aliases: []string{"GET"},
-	Short: "Compose GET request",
-	Args:  cobra.OnlyValidArgs,
+	Short:   "Compose GET request",
+	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return exec_method("GET", cmd, args)
 	},
 }
 var postCmd = &cobra.Command{
-	Use:   "post",
+	Use:     "post",
 	Aliases: []string{"POST"},
-	Short: "Compose POST request",
-	Args:  cobra.OnlyValidArgs,
+	Short:   "Compose POST request",
+	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return exec_method("POST", cmd, args)
 	},
 }
 var putCmd = &cobra.Command{
-	Use:   "put",
+	Use:     "put",
 	Aliases: []string{"PUT"},
-	Short: "Compose PUT request",
-	Args:  cobra.OnlyValidArgs,
+	Short:   "Compose PUT request",
+	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return exec_method("PUT", cmd, args)
 	},
 }
 var deleteCmd = &cobra.Command{
-	Use:   "delete",
+	Use:     "delete",
 	Aliases: []string{"DELETE"},
-	Short: "Compose DELETE request",
-	Args:  cobra.OnlyValidArgs,
+	Short:   "Compose DELETE request",
+	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return exec_method("DELETE", cmd, args)
 	},

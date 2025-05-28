@@ -1,11 +1,13 @@
 package debug
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"net/http"
 	"net/http/httputil"
@@ -52,7 +54,7 @@ var (
 	noWarnBinary bool
 )
 
-func exec_method(method string, cmd *cobra.Command, args []string) error {
+func execMethod(method string, cmd *cobra.Command, args []string) error {
 	targets := target.FromContext(cmd.Context())
 	if len(targets) > 1 {
 		return fmt.Errorf("refusing to debug request with more than 1 target")
@@ -97,7 +99,7 @@ func exec_method(method string, cmd *cobra.Command, args []string) error {
 	return formatOutput(resp)
 }
 
-func is_binary_mime_best_effort(mime string) bool {
+func mimeIsBinary(mime string) bool {
 	for _, exact := range [...]string{"application/zip", "application/octet-stream", "application/pdf"} {
 		if exact == mime {
 			return true
@@ -108,12 +110,53 @@ func is_binary_mime_best_effort(mime string) bool {
 			return true
 		}
 	}
+	fmt.Println("determining not binary mime")
 	return false
+}
+
+func isResponsePrintable(read *bufio.Reader) bool {
+	bytes, err := read.Peek(512)
+	if err == io.EOF {
+		return utf8.Valid(bytes)
+	}
+	if err != nil {
+		return false
+	}
+
+	fmt.Printf("%d %b\n", len(bytes), bytes)
+
+	// attempt to read utf8 runes one-by-one.
+	i := 0
+	for i < len(bytes) {
+		rune, size := utf8.DecodeRune(bytes[i:])
+		fmt.Printf("%s\n", rune)
+		if rune == utf8.RuneError {
+			// found unreadable byte.
+			// if we are at the end of the chunk, see if last byte(s) could
+			// be the start of valid utf8 that got cut off
+			// utf8 maxes at 4 octets per rune
+			if i < len(bytes) - 4 {
+				for _, byte := range bytes[i:] {
+					if !utf8.RuneStart(byte) {
+						return false
+					}
+				}
+			} else {
+				// non-utf8 byte found and it cannot have been cut off
+				// by chunking. thus conclude binary data
+				return false
+			}
+		}
+		i += size
+	}
+
+	return true
 }
 
 func formatOutput(resp *http.Response) error {
 	showBody := true
-	if interactive && !noWarnBinary && is_binary_mime_best_effort(resp.Header.Get("Content-Type")) {
+	body := bufio.NewReader(resp.Body)
+	if interactive && !noWarnBinary && (mimeIsBinary(resp.Header.Get("Content-Type")) || !isResponsePrintable(body)) {
 		fmt.Println("Response indicates a binary Content-Type, do you still want to print it? [y/N]")
 		var ans string
 		fmt.Scanln(&ans)
@@ -127,12 +170,12 @@ func formatOutput(resp *http.Response) error {
 	}
 	fmt.Printf("%s", head)
 	if showBody {
-		_, err := io.Copy(os.Stdout, resp.Body)
+		_, err := io.Copy(os.Stdout, body)
 		if err != nil {
 			return fmt.Errorf("error reading http response: %w", err)
 		}
 	} else {
-		fmt.Printf("<binary data of type %s, length %s>", resp.Header.Get("Content-Type"), resp.Header.Get("Content-Length"))
+		fmt.Printf("<binary data of type %s>", resp.Header.Get("Content-Type"))
 	}
 	return nil
 }
@@ -143,7 +186,7 @@ var getCmd = &cobra.Command{
 	Short:   "Compose GET request",
 	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return exec_method("GET", cmd, args)
+		return execMethod("GET", cmd, args)
 	},
 }
 var postCmd = &cobra.Command{
@@ -152,7 +195,7 @@ var postCmd = &cobra.Command{
 	Short:   "Compose POST request",
 	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return exec_method("POST", cmd, args)
+		return execMethod("POST", cmd, args)
 	},
 }
 var putCmd = &cobra.Command{
@@ -161,7 +204,7 @@ var putCmd = &cobra.Command{
 	Short:   "Compose PUT request",
 	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return exec_method("PUT", cmd, args)
+		return execMethod("PUT", cmd, args)
 	},
 }
 var deleteCmd = &cobra.Command{
@@ -170,7 +213,7 @@ var deleteCmd = &cobra.Command{
 	Short:   "Compose DELETE request",
 	Args:    cobra.OnlyValidArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return exec_method("DELETE", cmd, args)
+		return execMethod("DELETE", cmd, args)
 	},
 }
 

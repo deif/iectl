@@ -2,11 +2,11 @@ package bsp
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
@@ -20,12 +20,11 @@ var whatCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		u := url.URL{
 			Scheme: "ws",
-			Host:   "localhost:3000",
+			Host:   "iE250-05eb2f.local:3000",
 			Path:   "/",
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+		ctx := context.Background()
 
 		c, _, err := websocket.Dial(ctx, u.String(), nil)
 		if err != nil {
@@ -38,7 +37,13 @@ var whatCmd = &cobra.Command{
 			panic(err)
 		}
 
-		serve(session)
+		err = serve(session)
+		if errors.Is(err, io.EOF) {
+			err = nil
+		}
+		if err != nil {
+			return err
+		}
 		//// Open a new stream
 		//stream, err := session.Open()
 		//if err != nil {
@@ -58,12 +63,15 @@ func init() {
 }
 
 func serve(l net.Listener) error {
+	// var i int64
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("Hurra!, vi har GET / igennem mux\n")
-		fmt.Fprintf(w, "Hej server")
-	})
+	//r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	//	fmt.Printf("Hurra!, vi har GET / igennem mux\n")
+	//	fmt.Fprintf(w, "Hej server, i er %d", i)
+	//	i++
+	//})
+	r.Handle("/*", http.FileServer(http.Dir("/home/fas/Downloads")))
 
 	return http.Serve(l, r)
 }

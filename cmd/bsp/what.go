@@ -3,14 +3,13 @@ package bsp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 
-	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hashicorp/yamux"
 	"github.com/spf13/cobra"
 )
@@ -19,20 +18,34 @@ var whatCmd = &cobra.Command{
 	Use: "what",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		u := url.URL{
-			Scheme: "ws",
+			Scheme: "http",
 			Host:   "iE250-05eb2f.local:3000",
-			Path:   "/",
+			//Host: "localhost:3000",
+			Path: "/",
 		}
-
+		//websocket.Dial()
 		ctx := context.Background()
 
-		c, _, err := websocket.Dial(ctx, u.String(), nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 		if err != nil {
 			return err
 		}
-		defer c.CloseNow()
+		req.Header.Set("Upgrade", "not-a-websocket-but-a-special-deifsocket-socket")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
 
-		session, err := yamux.Client(websocket.NetConn(ctx, c, websocket.MessageBinary), nil)
+		if resp.StatusCode != http.StatusSwitchingProtocols {
+			return fmt.Errorf("endpoint did not switch protocol")
+		}
+
+		rwc, ok := resp.Body.(io.ReadWriteCloser)
+		if !ok {
+			return fmt.Errorf("body is not ReadWriteCloser capable: %T", resp.Body)
+		}
+
+		session, err := yamux.Client(rwc, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -53,7 +66,7 @@ var whatCmd = &cobra.Command{
 		//// Stream implements net.Conn
 		//stream.Write([]byte("ping"))
 
-		c.Close(websocket.StatusNormalClosure, "")
+		rwc.Close()
 		return nil
 	},
 }
@@ -65,12 +78,23 @@ func init() {
 func serve(l net.Listener) error {
 	// var i int64
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	//r.Use(middleware.Logger)
 	//r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 	//	fmt.Printf("Hurra!, vi har GET / igennem mux\n")
 	//	fmt.Fprintf(w, "Hej server, i er %d", i)
 	//	i++
 	//})
+
+	r.Put("/status", func(w http.ResponseWriter, r *http.Request) {
+		msg, err := io.ReadAll(io.LimitReader(r.Body, 1024*1024))
+		if err != nil {
+			http.Error(w, "Too large body", http.StatusBadRequest)
+			return
+		}
+
+		fmt.Printf("We have progress: %s", msg)
+	})
+
 	r.Handle("/*", http.FileServer(http.Dir("/home/fas/Downloads")))
 
 	return http.Serve(l, r)

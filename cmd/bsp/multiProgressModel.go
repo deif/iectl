@@ -112,18 +112,18 @@ func (m multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var animating bool
 		for i := range m.hosts {
 			h := m.hosts[i]
+			if h.progress.IsAnimating() {
+				animating = true
+			}
+
 			prog, cmd := h.progress.Update(msg)
 			if cmd == nil {
 				// this FrameMsg was not for this progressbar
 				continue
 			}
 
-			progModel := prog.(progress.Model)
-			if progModel.IsAnimating() {
-				animating = true
-			}
-
 			// we have mutated state, but values back
+			progModel := prog.(progress.Model)
 			h.progress = progModel
 			m.hosts[i] = h
 

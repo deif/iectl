@@ -21,11 +21,11 @@ type hostProgress struct {
 	name     string
 	status   string
 	err      string
-	progress *progress.Model
+	progress progress.Model
 }
 
 type multiProgressModel struct {
-	hosts     map[string]*hostProgress
+	hosts     map[string]hostProgress
 	hostOrder []string
 
 	quitting bool
@@ -38,21 +38,21 @@ type hostUpdate struct {
 	host     string
 }
 
-func multiProgressModelWithTargets(t []*firmwareTarget) (*multiProgressModel, error) {
-	mpModel := &multiProgressModel{hosts: make(map[string]*hostProgress)}
+func multiProgressModelWithTargets(t []*firmwareTarget) (multiProgressModel, error) {
+	mpModel := multiProgressModel{hosts: make(map[string]hostProgress)}
 	var keys []string
 	for _, v := range t {
 		keys = append(keys, v.Hostname)
 		_, exists := mpModel.hosts[v.Hostname]
 		if exists {
-			return nil, fmt.Errorf("%s is not unique", v.Hostname)
+			return multiProgressModel{}, fmt.Errorf("%s is not unique", v.Hostname)
 		}
 		p := progress.New(progress.WithGradient("#004637", "#12bc00"))
 
-		mpModel.hosts[v.Hostname] = &hostProgress{
+		mpModel.hosts[v.Hostname] = hostProgress{
 			name:     v.Hostname,
 			status:   "Queued...",
-			progress: &p,
+			progress: p,
 		}
 	}
 
@@ -62,11 +62,15 @@ func multiProgressModelWithTargets(t []*firmwareTarget) (*multiProgressModel, er
 	return mpModel, nil
 }
 
-func (m *multiProgressModel) Init() tea.Cmd {
+func (m multiProgressModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update handles UI updates
+// you might be tempted to ask the question, why are these not
+// pointer receivers instead of having to deal with all these
+// mutated values, thing is: bubbletea gets racy if not done this way
+func (m multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -76,11 +80,14 @@ func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
-		for _, v := range m.hosts {
+		for i, v := range m.hosts {
 			v.progress.Width = msg.Width
 			if v.progress.Width > maxWidth {
 				v.progress.Width = maxWidth
 			}
+
+			// put state back
+			m.hosts[i] = v
 		}
 		return m, nil
 
@@ -89,27 +96,37 @@ func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case hostUpdate:
-		if msg.progress.err != "" {
-			m.hosts[msg.host].err = msg.progress.err
-			return m, nil
-		}
+		t := m.hosts[msg.host]
+		t.status = msg.progress.status
+		t.err = msg.progress.err
+		cmd := t.progress.SetPercent(msg.progress.ratio)
 
-		m.hosts[msg.host].status = msg.progress.status
-		return m, m.hosts[msg.host].progress.SetPercent(msg.progress.ratio)
+		// put mutated state back
+		m.hosts[msg.host] = t
+
+		return m, cmd
 
 	// FrameMsg is sent when the progress bar wants to animate itself
 	case progress.FrameMsg:
 		cmds := make([]tea.Cmd, 0)
 		var animating bool
 		for i := range m.hosts {
-			prog, cmd := m.hosts[i].progress.Update(msg)
-			progModel := prog.(progress.Model)
+			h := m.hosts[i]
+			prog, cmd := h.progress.Update(msg)
+			if cmd == nil {
+				// this FrameMsg was not for this progressbar
+				continue
+			}
 
+			progModel := prog.(progress.Model)
 			if progModel.IsAnimating() {
 				animating = true
 			}
 
-			m.hosts[i].progress = &progModel
+			// we have mutated state, but values back
+			h.progress = progModel
+			m.hosts[i] = h
+
 			cmds = append(cmds, cmd)
 		}
 
@@ -126,9 +143,9 @@ func (m *multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 const hostnamePad = 18
 
-func (m *multiProgressModel) View() string {
+func (m multiProgressModel) View() string {
 	view := "Installing firmware..." + "\n\n"
-	var h *hostProgress
+	var h hostProgress
 	for _, v := range m.hostOrder {
 		h = m.hosts[v]
 

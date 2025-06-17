@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/deif/iectl/auth"
+	"github.com/deif/iectl/target"
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 )
@@ -17,42 +17,57 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "General system status",
+	Long: `Prints general system status
+
+Examples:
+  
+  Query a single controller, in human readable form:
+  
+    iectl bsp status \
+      --target iE250-05eb2f.local
+  
+  Query firmware versions of a network of DEIF controllers, with jq:
+  
+    iectl bsp status --target-all \
+      --json | jq ".hostname,.software"
+`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := auth.FromContext(cmd.Context())
-		host, _ := cmd.Flags().GetString("hostname")
-		u := url.URL{
-			Scheme: "https",
-			Host:   host,
-			Path:   "/bsp/system/status",
-		}
-
-		resp, err := client.Get(u.String())
-		if err != nil {
-			return fmt.Errorf("unable to http get: %w", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
-		}
-
-		asJson, _ := cmd.Flags().GetBool("json")
-		if asJson {
-			_, err = io.Copy(os.Stdout, resp.Body)
-			if err != nil {
-				return fmt.Errorf("unable to copy to stdout: %w", err)
+		targets := target.FromContext(cmd.Context())
+		for _, target := range targets {
+			u := url.URL{
+				Scheme: "https",
+				Host:   target.Hostname,
+				Path:   "/bsp/system/status",
 			}
-			return nil
-		}
 
-		dec := json.NewDecoder(resp.Body)
-		d := &Device{}
-		err = dec.Decode(d)
-		if err != nil {
-			return fmt.Errorf("unable to unmarshal status message: %w", err)
-		}
+			resp, err := target.Client.Get(u.String())
+			if err != nil {
+				return fmt.Errorf("unable to http get: %w", err)
+			}
+			defer resp.Body.Close()
 
-		printDeviceInfo(d)
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
+			}
+
+			asJson, _ := cmd.Flags().GetBool("json")
+			if asJson {
+				_, err = io.Copy(os.Stdout, resp.Body)
+				if err != nil {
+					return fmt.Errorf("unable to copy to stdout: %w", err)
+				}
+				continue
+			}
+
+			dec := json.NewDecoder(resp.Body)
+			d := &Device{}
+			err = dec.Decode(d)
+			if err != nil {
+				return fmt.Errorf("unable to unmarshal status message: %w", err)
+			}
+
+			printDeviceInfo(d)
+		}
 
 		return nil
 	},

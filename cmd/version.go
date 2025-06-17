@@ -26,7 +26,7 @@ var versionCmd = &cobra.Command{
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		asJson, _ := cmd.Flags().GetBool("json")
 		if asJson {
-			return fmt.Errorf("version cant do --json")
+			return fmt.Errorf("version can't do --json")
 		}
 		return nil
 	},

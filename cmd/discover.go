@@ -20,13 +20,18 @@ Continuously scans and reports discovered devices in real time.
 Default: Displays each discovered host only once, writing a new line as new hosts appear.
  --json: Emits the full list of all discovered devices as a JSON array every time a new device is found.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		msg := new(dns.Msg)
-		msg.SetQuestion(dns.Fqdn("_base-unit-deif._tcp.local"), dns.TypePTR)
+		q := dns.Question{Name: dns.Fqdn("_base-unit-deif._tcp.local"), Qtype: dns.TypePTR}
 
-		browser := mdns.Browser{Question: *msg}
+		browser := mdns.Browser{Question: q}
+		timeout, _ := cmd.Flags().GetDuration("timeout")
+		ctx := context.Background()
+		if timeout != 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
 
-		var err error
-		updates, err = browser.Run(context.Background())
+		updates, err := browser.Run(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to browse mdns: %w", err)
 		}
@@ -36,7 +41,10 @@ Default: Displays each discovered host only once, writing a new line as new host
 		asJson, _ := cmd.Flags().GetBool("json")
 		if asJson {
 			for {
-				u := <-updates
+				u, ok := <-updates
+				if !ok {
+					break
+				}
 				p, err := json.Marshal(u)
 				if err != nil {
 					return fmt.Errorf("unable to marshal json: %w", err)
@@ -48,7 +56,10 @@ Default: Displays each discovered host only once, writing a new line as new host
 
 		known := make(map[string]struct{})
 		for {
-			u := <-updates
+			u, ok := <-updates
+			if !ok {
+				break
+			}
 			for _, v := range u {
 				_, exists := known[v.Hostname]
 				if exists {
@@ -59,10 +70,13 @@ Default: Displays each discovered host only once, writing a new line as new host
 				known[v.Hostname] = struct{}{}
 			}
 		}
+
+		return nil
 	},
 }
 
 func init() {
+	discoverCmd.Flags().Duration("timeout", 0, "timeout, zero-value disables timeout")
 	rootCmd.AddCommand(discoverCmd)
-	// flags for this command
+
 }

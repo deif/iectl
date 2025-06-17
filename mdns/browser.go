@@ -12,7 +12,7 @@ import (
 )
 
 type Browser struct {
-	Question dns.Msg
+	Question dns.Question
 }
 
 func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
@@ -21,9 +21,13 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 		return nil, err
 	}
 
+	queryMsg := dns.Msg{}
+	queryMsg.SetQuestion(b.Question.Name, b.Question.Qtype)
 	go func() {
+		timer := time.NewTimer(time.Second)
+		round := 1
 		for {
-			err := Query(b.Question)
+			err := Query(queryMsg)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					continue
@@ -32,8 +36,17 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 				panic(err) // FIXME: not optimal
 			}
 
-			// FIXME: should backoff exponentially
-			time.Sleep(time.Second * 1)
+			timer.Reset(expDuration(round))
+			round++
+
+			// Wait until the timer fires or the context is cancelled
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				continue
+			}
+
 		}
 	}()
 
@@ -45,16 +58,24 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 		for {
 			msg, ok := <-dnsChan
 			if !ok {
+				close(updates)
 				break
 			}
-
 			for _, a := range msg.Answer {
 				switch answer := a.(type) {
 				case *dns.PTR:
-					q := dns.Msg{}
-					q.SetQuestion(dns.Fqdn(answer.Ptr), dns.TypeSRV)
-					Query(q)
+					for _, v := range msg.Answer {
+						if v.Header().Name == b.Question.Name {
+							q := dns.Msg{}
+							q.SetQuestion(dns.Fqdn(answer.Ptr), dns.TypeSRV)
+							Query(q)
+						}
+					}
 				case *dns.SRV:
+					if !strings.HasSuffix(answer.Header().Name, b.Question.Name) {
+						// We didnt ask for this
+						continue
+					}
 					name := strings.TrimRight(answer.Target, ".")
 					t, exists := index[name]
 					if exists {
@@ -74,24 +95,40 @@ func (b *Browser) Run(ctx context.Context) (chan []*Target, error) {
 	return updates, nil
 }
 
+// expDuration targets a sequence like
+// 1s 2s 4s 8s 16s 32s 1m 1m 1m 1m 1m
+func expDuration(i int) time.Duration {
+	if i > 6 {
+		return time.Minute
+	}
+
+	backoff := time.Second * (1 << i)
+	if backoff > time.Minute {
+		backoff = time.Minute
+	}
+
+	return backoff
+
+}
+
 type Target struct {
 	Hostname string
+
+	Marked bool
 }
 
-func (t Target) Title() string {
-	return t.Hostname
+func (t *Target) Title() string {
+	if !t.Marked {
+		return t.Hostname
+	}
+
+	return fmt.Sprintf(">> %s", t.Hostname)
 }
 
-func (t Target) Description() string {
+func (t *Target) Description() string {
 	return fmt.Sprintf("https://%s/", t.Hostname)
 }
 
-func (t Target) FilterValue() string {
+func (t *Target) FilterValue() string {
 	return t.Hostname
 }
-
-func (t *Target) Update(d dns.RR) {
-	// updating target
-}
-
-//log.Printf("%+v has update %+v", t, d)

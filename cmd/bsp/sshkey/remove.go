@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/deif/iectl/auth"
+	"github.com/deif/iectl/target"
 	"github.com/spf13/cobra"
 )
 
@@ -14,32 +14,32 @@ var removeCmd = &cobra.Command{
 	Aliases: []string{"delete"},
 	Short:   "remove ssh public key(s) for the root user",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := auth.FromContext(cmd.Context())
-		host, _ := cmd.Flags().GetString("hostname")
-		u := url.URL{
-			Scheme: "https",
-			Host:   host,
-			Path:   "/bsp/keys/ssh",
-		}
+		targets := target.FromContext(cmd.Context())
+		for _, target := range targets {
+			u := url.URL{
+				Scheme: "https",
+				Host:   target.Hostname,
+				Path:   "/bsp/keys/ssh",
+			}
 
-		req, err := http.NewRequest("DELETE", u.String(), nil)
-		if err != nil {
-			return fmt.Errorf("unable to create http request: %w", err)
-		}
+			req, err := http.NewRequest("DELETE", u.String(), nil)
+			if err != nil {
+				return fmt.Errorf("%s: unable to create http request: %w", target.Hostname, err)
+			}
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("unable to http post: %w", err)
-		}
-		defer resp.Body.Close()
+			resp, err := target.Client.Do(req)
+			if err != nil {
+				return fmt.Errorf("%s: unable to http post: %w", target.Hostname, err)
+			}
+			defer resp.Body.Close()
 
-		switch resp.StatusCode {
-		case http.StatusOK:
-		case http.StatusAccepted:
-		default:
-			return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
+			switch resp.StatusCode {
+			case http.StatusOK:
+			case http.StatusAccepted:
+			default:
+				return fmt.Errorf("%s: unexpected statuscode: %d", target.Hostname, resp.StatusCode)
+			}
 		}
-
 		return nil
 	},
 }

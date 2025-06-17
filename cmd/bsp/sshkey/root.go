@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/deif/iectl/auth"
+	"github.com/deif/iectl/target"
 	"github.com/spf13/cobra"
 )
 
@@ -17,46 +17,55 @@ var RootCmd = &cobra.Command{
 	Short: "Get, set or remove ssh public key(s) for the root user",
 	Args:  cobra.MatchAll(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := auth.FromContext(cmd.Context())
-		host, _ := cmd.Flags().GetString("hostname")
-		u := url.URL{
-			Scheme: "https",
-			Host:   host,
-			Path:   "/bsp/keys/ssh",
+		targets := target.FromContext(cmd.Context())
+		for _, target := range targets {
+			u := url.URL{
+				Scheme: "https",
+				Host:   target.Hostname,
+				Path:   "/bsp/keys/ssh",
+			}
+
+			resp, err := target.Client.Get(u.String())
+			if err != nil {
+				return fmt.Errorf("%s: unable to http post: %w", target.Hostname, err)
+			}
+			defer resp.Body.Close()
+
+			asJson, _ := cmd.Flags().GetBool("json")
+
+			switch resp.StatusCode {
+			case http.StatusOK:
+			case http.StatusNotFound:
+				if asJson {
+					fmt.Printf("\"%s %s\"\n", target.Hostname, "has no authorized_key.")
+					continue
+				}
+				fmt.Println(target.Hostname, "has no authorized_key.")
+				continue
+			default:
+				return fmt.Errorf("%s: unexpected statuscode: %d", target.Hostname, resp.StatusCode)
+			}
+
+			if asJson {
+				_, err := io.Copy(os.Stdout, resp.Body)
+				if err != nil {
+					return err
+				}
+				continue
+			}
+
+			wrap := struct {
+				Certificate string `json:"certificate"`
+			}{}
+
+			dec := json.NewDecoder(resp.Body)
+			err = dec.Decode(&wrap)
+			if err != nil {
+				return fmt.Errorf("%s: unable to unmarshal json: %w", target.Hostname, err)
+			}
+
+			fmt.Print(wrap.Certificate)
 		}
-
-		resp, err := client.Get(u.String())
-		if err != nil {
-			return fmt.Errorf("unable to http post: %w", err)
-		}
-		defer resp.Body.Close()
-
-		switch resp.StatusCode {
-		case http.StatusOK:
-		case http.StatusNotFound:
-			fmt.Println("Device has no authorized_key.")
-			return nil
-		default:
-			return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
-		}
-
-		asJson, _ := cmd.Flags().GetBool("json")
-		if asJson {
-			_, err := io.Copy(os.Stdout, resp.Body)
-			return err
-		}
-
-		wrap := struct {
-			Certificate string `json:"certificate"`
-		}{}
-
-		dec := json.NewDecoder(resp.Body)
-		err = dec.Decode(&wrap)
-		if err != nil {
-			return fmt.Errorf("unable to unmarshal json: %w", err)
-		}
-
-		fmt.Print(wrap.Certificate)
 		return nil
 	},
 }

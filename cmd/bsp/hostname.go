@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/deif/iectl/auth"
+	"github.com/deif/iectl/target"
 	"github.com/spf13/cobra"
 )
 
@@ -22,90 +22,90 @@ var hostnameCmd = &cobra.Command{
 			return gethostnameStatus(cmd, args)
 		}
 
-		client := auth.FromContext(cmd.Context())
-		host, _ := cmd.Flags().GetString("hostname")
-		u := url.URL{
-			Scheme: "https",
-			Host:   host,
-			Path:   "/bsp/hostname",
+		sameForAll, _ := cmd.Flags().GetBool("same-for-all")
+		targets := target.FromContext(cmd.Context())
+		if len(targets) > 1 && !sameForAll {
+			return fmt.Errorf("multiple targets, cannot set hostname without --same-for-all")
 		}
 
-		reqStruct := struct {
-			Hostname string `json:"hostname"`
-		}{
-			Hostname: args[0],
-		}
+		for _, target := range targets {
+			u := url.URL{
+				Scheme: "https",
+				Host:   target.Hostname,
+				Path:   "/bsp/hostname",
+			}
 
-		body, err := json.Marshal(reqStruct)
-		if err != nil {
-			return fmt.Errorf("unable to marshal request body: %w", err)
-		}
+			reqStruct := struct {
+				Hostname string `json:"hostname"`
+			}{
+				Hostname: args[0],
+			}
 
-		resp, err := client.Post(u.String(), "application/json", bytes.NewReader(body))
-		if err != nil {
-			return fmt.Errorf("unable to http post: %w", err)
-		}
-		defer resp.Body.Close()
+			body, err := json.Marshal(reqStruct)
+			if err != nil {
+				return fmt.Errorf("unable to marshal request body: %w", err)
+			}
 
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
-		}
+			resp, err := target.Client.Post(u.String(), "application/json", bytes.NewReader(body))
+			if err != nil {
+				return fmt.Errorf("unable to http post: %w", err)
+			}
+			defer resp.Body.Close()
 
-		asJson, _ := cmd.Flags().GetBool("json")
-		if !asJson {
-			fmt.Println("Device answers: 200 OK")
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
+			}
 		}
-
-		// nothing for --json. users must deal with the exit code of iecli
 		return nil
 	},
 }
 
 func init() {
+	hostnameCmd.Flags().Bool("same-for-all", false, "allow multiple targets to have the same hostname set")
 	RootCmd.AddCommand(hostnameCmd)
 }
 
-func gethostnameStatus(cmd *cobra.Command, args []string) error {
-	client := auth.FromContext(cmd.Context())
-	host, _ := cmd.Flags().GetString("hostname")
-	u := url.URL{
-		Scheme: "https",
-		Host:   host,
-		Path:   "/bsp/hostname",
-	}
-
-	resp, err := client.Get(u.String())
-	if err != nil {
-		return fmt.Errorf("unable to http get: %w", err)
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-	default:
-		return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
-	}
-
-	asJson, _ := cmd.Flags().GetBool("json")
-	if asJson {
-		_, err = io.Copy(os.Stdout, resp.Body)
-		if err != nil {
-			return fmt.Errorf("unable to copy to stdout: %w", err)
+func gethostnameStatus(cmd *cobra.Command, _ []string) error {
+	targets := target.FromContext(cmd.Context())
+	for _, target := range targets {
+		u := url.URL{
+			Scheme: "https",
+			Host:   target.Hostname,
+			Path:   "/bsp/hostname",
 		}
-		return nil
+
+		resp, err := target.Client.Get(u.String())
+		if err != nil {
+			return fmt.Errorf("unable to http get: %w", err)
+		}
+		defer resp.Body.Close()
+
+		switch resp.StatusCode {
+		case http.StatusOK:
+		default:
+			return fmt.Errorf("unexpected statuscode: %d", resp.StatusCode)
+		}
+
+		asJson, _ := cmd.Flags().GetBool("json")
+		if asJson {
+			_, err = io.Copy(os.Stdout, resp.Body)
+			if err != nil {
+				return fmt.Errorf("unable to copy to stdout: %w", err)
+			}
+			return nil
+		}
+
+		dec := json.NewDecoder(resp.Body)
+		response := &struct {
+			Hostname string `json:"hostname"`
+		}{}
+
+		err = dec.Decode(response)
+		if err != nil {
+			return fmt.Errorf("unable to unmarshal response: %w", err)
+		}
+
+		fmt.Printf("Current hostname: %s\n", response.Hostname)
 	}
-
-	dec := json.NewDecoder(resp.Body)
-	response := &struct {
-		Hostname string `json:"hostname"`
-	}{}
-
-	err = dec.Decode(response)
-	if err != nil {
-		return fmt.Errorf("unable to unmarshal response: %w", err)
-	}
-
-	fmt.Printf("Current hostname: %s\n", response.Hostname)
-
 	return nil
 }

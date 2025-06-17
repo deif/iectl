@@ -68,7 +68,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for _, v := range m.list.Items() {
 				t, ok := v.(*mdns.Target)
 				if !ok {
-					panic(fmt.Sprintf("cant handle %T", v))
+					panic(fmt.Sprintf("can't handle %T", v))
 				}
 				if t.Marked {
 					selected = append(selected, t)
@@ -87,7 +87,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s := m.list.SelectedItem()
 			t, ok := s.(*mdns.Target)
 			if !ok {
-				panic(fmt.Sprintf("cant handle %T", s))
+				panic(fmt.Sprintf("can't handle %T", s))
 			}
 
 			m.Selected = []*mdns.Target{t}
@@ -97,7 +97,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s := m.list.SelectedItem()
 			t, ok := s.(*mdns.Target)
 			if !ok {
-				panic(fmt.Sprintf("cant handle %T", s))
+				panic(fmt.Sprintf("can't handle %T", s))
 			}
 			t.Marked = !t.Marked
 			return m, cmd

@@ -29,7 +29,7 @@ var firmwareCmd = &cobra.Command{
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		asJson, _ := cmd.Flags().GetBool("json")
 		if asJson {
-			return fmt.Errorf("install cant do --json")
+			return fmt.Errorf("install can't do --json")
 		}
 		return nil
 	},

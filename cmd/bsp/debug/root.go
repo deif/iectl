@@ -51,7 +51,7 @@ var (
 	path         string
 	interactive  bool
 	printHeader  bool
-	noWarnBinary bool
+	printBinary bool
 )
 
 func execMethod(method string, cmd *cobra.Command, args []string) error {
@@ -156,13 +156,8 @@ func isResponsePrintable(read *bufio.Reader) bool {
 func formatOutput(resp *http.Response) error {
 	showBody := true
 	body := bufio.NewReader(resp.Body)
-	if interactive && !noWarnBinary && (mimeIsBinary(resp.Header.Get("Content-Type")) || !isResponsePrintable(body)) {
-		fmt.Println("Response indicates a binary Content-Type, do you still want to print it? [y/N]")
-		var ans string
-		fmt.Scanln(&ans)
-		if !strings.HasPrefix(strings.ToLower(ans), "y") {
-			showBody = false
-		}
+	if interactive && !printBinary && (mimeIsBinary(resp.Header.Get("Content-Type")) || !isResponsePrintable(body)) {
+		showBody = false
 	}
 	head, err := httputil.DumpResponse(resp, false)
 	if err != nil {
@@ -175,7 +170,8 @@ func formatOutput(resp *http.Response) error {
 			return fmt.Errorf("error reading http response: %w", err)
 		}
 	} else {
-		fmt.Printf("<binary data of type %s>", resp.Header.Get("Content-Type"))
+		fmt.Printf("<binary data of type %s>\n", resp.Header.Get("Content-Type"))
+		fmt.Println("(use --print-binary option to print the output anyway)")
 	}
 	return nil
 }
@@ -219,7 +215,7 @@ var deleteCmd = &cobra.Command{
 
 func init() {
 	RootCmd.Flags().BoolVar(&printHeader, "header", false, "If true, print HTTP headers of response.")
-	RootCmd.Flags().BoolVar(&noWarnBinary, "no-warn-binary", false, "If false and in interactive mode, do not warn about http response containing binary data.")
+	RootCmd.Flags().BoolVar(&printBinary, "print-binary", false, "If set, print binary output even in interactive mode.")
 	RootCmd.AddCommand(getCmd)
 	RootCmd.AddCommand(postCmd)
 	RootCmd.AddCommand(putCmd)

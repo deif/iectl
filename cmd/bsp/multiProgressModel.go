@@ -93,6 +93,19 @@ func (m multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case multiProgressModelPleaseQuit:
 		m.quitting = true
+
+		var animating = false
+		for _, v := range m.hosts {
+			if v.progress.IsAnimating() {
+				animating = true
+				break // we don't need to look further
+			}
+		}
+
+		if !animating {
+			return m, tea.Quit
+		}
+
 		return m, nil
 
 	case hostUpdate:

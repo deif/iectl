@@ -106,6 +106,9 @@ var firmwareCmd = &cobra.Command{
 
 				// block here until the firmware is uploaded
 				err := v.LoadFirmware(operationContext, 3)
+				if err != nil {
+					err = fmt.Errorf("%s failed: %w", v.Hostname, err)
+				}
 
 				wg.Wait() // we have to wait until the ui feeder has emptied the
 				// progress channel and sent it to the ui, otherwise
@@ -149,6 +152,10 @@ var firmwareCmd = &cobra.Command{
 
 				// block here until the firmware is uploaded
 				err := v.ApplyFirmware(operationContext, 1)
+				if err != nil {
+					err = fmt.Errorf("%s failed: %w", v.Hostname, err)
+				}
+
 				wg.Wait()
 
 				return err

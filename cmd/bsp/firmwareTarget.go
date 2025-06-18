@@ -224,6 +224,8 @@ func (f *firmwareTarget) LoadFirmware(ctx context.Context, rateLimit rate.Limit)
 }
 
 func (f *firmwareTarget) ApplyFirmware(ctx context.Context, rateLimit rate.Limit) error {
+	defer close(f.ApplyProgress)
+
 	u := url.URL{
 		Scheme: "https",
 		Host:   f.Hostname,
@@ -259,7 +261,6 @@ func (f *firmwareTarget) ApplyFirmware(ctx context.Context, rateLimit rate.Limit
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			close(f.ApplyProgress)
 			return ctx.Err()
 		case <-t.C:
 		}
@@ -273,24 +274,30 @@ func (f *firmwareTarget) ApplyFirmware(ctx context.Context, rateLimit rate.Limit
 
 		resp, err = f.Client.Do(req)
 		if err != nil {
-			f.ApplyProgress <- progressMsg{ratio: 0, status: fmt.Sprintf("ERR: %s", err)}
+			f.ApplyProgress <- progressMsg{ratio: 0, status: fmt.Sprintf("ERROR: %s", err)}
 			continue
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
 		case http.StatusAccepted:
+
 		case http.StatusCreated:
 			resp.Body.Close()
 			f.ApplyProgress <- progressMsg{ratio: 1.0, status: "Successfully installed firmware."}
-			close(f.ApplyProgress)
-
 			return nil
+
 		case http.StatusNotFound:
+			f.ApplyProgress <- progressMsg{ratio: 0, err: "device answers: no firmware found"}
 			return fmt.Errorf("device answers: no firmware found")
+
 		case http.StatusInternalServerError:
+			f.ApplyProgress <- progressMsg{ratio: 0, err: "failed to install image: internal server error"}
 			return fmt.Errorf("failed to install image: internal server error")
+
 		default:
-			return fmt.Errorf("unexpected status code %d", resp.StatusCode)
+			err = fmt.Errorf("unexpected status code %d", resp.StatusCode)
+			f.ApplyProgress <- progressMsg{ratio: 0, err: err.Error()}
+			return err
 		}
 
 		// StatusAccepted and StatusCreated have progress in their bodies

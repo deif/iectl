@@ -25,7 +25,6 @@ import (
 var RootCmd = &cobra.Command{
 	Use:   "bsp",
 	Short: "Collection of commands relating to the bsp rest api",
-
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		err := cmd.ValidateRequiredFlags()
 		if err != nil {

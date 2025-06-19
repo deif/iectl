@@ -10,7 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -85,58 +85,87 @@ func Client(host, user, pass string, insecure bool) (*http.Client, error) {
 		return nil, fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
 	}
 
-	var refreshToken string
-	cookies := resp.Cookies()
-	for _, v := range cookies {
+	// create a new Transport, using the old transport from c
+	t := &authTransport{
+		RoundTripper: c.Transport,
+	}
+
+	// replace c's transport with the auth transport
+	c.Transport = t
+
+	jwt := resp.Header.Get("Authorization")
+	t.token.Store(&jwt)
+
+	for _, v := range resp.Cookies() {
 		if v.Name == "refresh_token" {
-			refreshToken = v.Value
+			t.refreshToken = v.Value
+
+			// dont look further
+			break
 		}
 	}
 
-	t := &authTransport{
-		RoundTripper: c.Transport,
-		token:        resp.Header.Get("Authorization"),
-		refreshToken: refreshToken,
-	}
-
-	// if the refreshToken is non empty, initialize a keepalive routine
-	if refreshToken != "" {
+	// if we have a refreshToken, keep our JWT alive
+	if t.refreshToken != "" {
+		// start loop that refreshes token
 		go t.keepalive(u)
 	}
-
-	c.Transport = t
 
 	return c, nil
 }
 
 type authTransport struct {
-	sync.RWMutex
 	http.RoundTripper
-	token           string
+	token           atomic.Pointer[string]
 	refreshToken    string
-	refreshTokenErr error
+	refreshTokenErr atomic.Pointer[error]
 }
 
 func (a *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Clone request to avoid modifying the original one
 	clonedReq := req.Clone(req.Context())
 
-	a.RLock()
-	clonedReq.Header.Set("Authorization", a.token)
-	a.RUnlock()
+	t := a.token.Load()
+	clonedReq.Header.Set("Authorization", *t)
 
-	return a.RoundTripper.RoundTrip(clonedReq)
+	resp, err := a.RoundTripper.RoundTrip(clonedReq)
+	if err != nil {
+		refreshErr := a.refreshTokenErr.Load()
+		if refreshErr != nil {
+			return resp, errors.Join(err, fmt.Errorf("before that: %w", *refreshErr))
+		}
+
+		return resp, err
+	}
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		refreshErr := a.refreshTokenErr.Load()
+		if refreshErr != nil {
+			return resp, errors.Join(err, fmt.Errorf("status 401 unauthorized, prior to that: %w", *refreshErr))
+		}
+	}
+
+	return resp, err
 }
 
 func (a *authTransport) keepalive(url url.URL) {
 	url.Path = "/auth/refresh"
 	for {
 		// TODO: use actual expire value from JWT
-		// for now, we know its usually 10 minuttes, so we refresh at every 9 minuttes
+		// 	for now, we know its usually 10 minuttes, so we refresh at every 9 minuttes
+		//
+		// TODO: we should learn if we are even supposed to refresh the token before
+		//   the jwt expires - to me it seems like the refresh_token works even though
+		//	 hours might have gone by - this could significantly simplify the code as
+		//   we wont need any routines to do stuff in the background
+		//
+		// TODO: give consumers a way to cancel this routine
+		// 	In the context of iectl, it think its okay that this jwt is refreshed forever
 		time.Sleep(time.Minute * 9)
 		req, err := http.NewRequest("GET", url.String(), nil)
 		if err != nil {
-			a.refreshTokenErr = fmt.Errorf("refresh token: could not create http request: %w", err)
+			err = fmt.Errorf("refresh token: could not create http request: %w", err)
+			a.refreshTokenErr.Store(&err)
 			break
 		}
 
@@ -144,12 +173,14 @@ func (a *authTransport) keepalive(url url.URL) {
 			Name:  "refresh_token",
 			Value: a.refreshToken,
 		}
+
 		req.AddCookie(c)
 
 		httpClient := &http.Client{Transport: a}
 		resp, err := httpClient.Do(req)
 		if err != nil {
-			a.refreshTokenErr = fmt.Errorf("refresh token: request failed: %w", err)
+			err = fmt.Errorf("refresh token: request failed: %w", err)
+			a.refreshTokenErr.Store(&err)
 			break
 		}
 
@@ -157,12 +188,17 @@ func (a *authTransport) keepalive(url url.URL) {
 		resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			a.refreshTokenErr = fmt.Errorf("refresh token: request returned unexpected status code: %d", resp.StatusCode)
+			err = fmt.Errorf("refresh token: request returned unexpected status code: %d", resp.StatusCode)
+			a.refreshTokenErr.Store(&err)
 			break
 		}
 
-		a.Lock()
-		a.token = resp.Header.Get("Authorization")
-		a.Unlock()
+		jwt := resp.Header.Get("Authorization")
+		if jwt == "" {
+			err = fmt.Errorf("refresh token: a successive call to refresh did not include a new JWT in its response")
+			a.refreshTokenErr.Store(&err)
+		}
+
+		a.token.Store(&jwt)
 	}
 }

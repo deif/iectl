@@ -1,2 +1,5 @@
 # Added by goreleaser init:
 dist/
+
+# just for temp dev files
+temp/

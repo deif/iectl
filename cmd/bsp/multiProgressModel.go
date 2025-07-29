@@ -20,18 +20,16 @@ var (
 )
 
 type hostProgress struct {
-	name     string
-	status   string
-	err      string
-	progress progress.Model
+	name       string
+	status     string
+	err        string
+	progress   progress.Model
 	percentage float64
 }
 
 type multiProgressModel struct {
 	hosts     map[string]hostProgress
 	hostOrder []string
-
-	quitting bool
 }
 
 type multiProgressModelPleaseQuit struct{}
@@ -41,11 +39,9 @@ type hostUpdate struct {
 	host     string
 }
 
-
-
 func multiProgressModelWithTargets(t []*firmwareTarget) (multiProgressModel, error) {
 	mpModel := multiProgressModel{
-		hosts: make(map[string]hostProgress), 
+		hosts: make(map[string]hostProgress),
 	}
 	var keys []string
 	for _, v := range t {
@@ -73,7 +69,6 @@ func (m multiProgressModel) Init() tea.Cmd {
 	return nil
 }
 
-
 // Update handles UI updates
 // you might be tempted to ask the question, why are these not
 // pointer receivers instead of having to deal with all these
@@ -99,23 +94,6 @@ func (m multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case multiProgressModelPleaseQuit:
-		m.quitting = true
-
-		animating := false
-		for _, v := range m.hosts {
-			if v.progress.IsAnimating() {
-				animating = true
-				break // we don't need to look further
-			}
-		}
-
-		if !animating {
-			return m, tea.Quit
-		}
-
-		return m, nil
-
 	case hostUpdate:
 		t := m.hosts[msg.host]
 		t.status = msg.progress.status
@@ -127,13 +105,10 @@ func (m multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 
-	// FrameMsg is sent when the progress bar wants to animate itself
-
 	default:
 		return m, nil
 	}
 }
-
 
 const hostnamePad = 18
 
@@ -157,11 +132,7 @@ func (m multiProgressModel) View() string {
 
 	return view
 
-
 }
-
-
-
 
 func formatHostname(text string, maxLen int) string {
 	if len(text) == maxLen {

@@ -164,8 +164,7 @@ var firmwareCmd = &cobra.Command{
 
 		operationError = loadGroup.Wait()
 
-		// ...PleaseQuit will shutdown the ui once animations have finished
-		ui.Send(multiProgressModelPleaseQuit{})
+		ui.Quit()
 
 		return errors.Join(operationError, uiGroup.Wait())
 	},

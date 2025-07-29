@@ -14,21 +14,22 @@ const (
 	maxWidth = 60
 )
 
-var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render
-var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff6262")).Render
+var (
+	helpStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render
+	errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff6262")).Render
+)
 
 type hostProgress struct {
-	name     string
-	status   string
-	err      string
-	progress progress.Model
+	name       string
+	status     string
+	err        string
+	progress   progress.Model
+	percentage float64
 }
 
 type multiProgressModel struct {
 	hosts     map[string]hostProgress
 	hostOrder []string
-
-	quitting bool
 }
 
 type multiProgressModelPleaseQuit struct{}
@@ -39,7 +40,9 @@ type hostUpdate struct {
 }
 
 func multiProgressModelWithTargets(t []*firmwareTarget) (multiProgressModel, error) {
-	mpModel := multiProgressModel{hosts: make(map[string]hostProgress)}
+	mpModel := multiProgressModel{
+		hosts: make(map[string]hostProgress),
+	}
 	var keys []string
 	for _, v := range t {
 		keys = append(keys, v.Hostname)
@@ -91,63 +94,16 @@ func (m multiProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case multiProgressModelPleaseQuit:
-		m.quitting = true
-
-		var animating = false
-		for _, v := range m.hosts {
-			if v.progress.IsAnimating() {
-				animating = true
-				break // we don't need to look further
-			}
-		}
-
-		if !animating {
-			return m, tea.Quit
-		}
-
-		return m, nil
-
 	case hostUpdate:
 		t := m.hosts[msg.host]
 		t.status = msg.progress.status
 		t.err = msg.progress.err
-		cmd := t.progress.SetPercent(msg.progress.ratio)
+		t.percentage = msg.progress.ratio
 
 		// put mutated state back
 		m.hosts[msg.host] = t
 
-		return m, cmd
-
-	// FrameMsg is sent when the progress bar wants to animate itself
-	case progress.FrameMsg:
-		cmds := make([]tea.Cmd, 0)
-		var animating bool
-		for i := range m.hosts {
-			h := m.hosts[i]
-			if h.progress.IsAnimating() {
-				animating = true
-			}
-
-			prog, cmd := h.progress.Update(msg)
-			if cmd == nil {
-				// this FrameMsg was not for this progressbar
-				continue
-			}
-
-			// we have mutated state, but values back
-			progModel := prog.(progress.Model)
-			h.progress = progModel
-			m.hosts[i] = h
-
-			cmds = append(cmds, cmd)
-		}
-
-		if m.quitting && !animating {
-			return m, tea.Quit
-		}
-
-		return m, tea.Batch(cmds...)
+		return m, nil
 
 	default:
 		return m, nil
@@ -162,20 +118,22 @@ func (m multiProgressModel) View() string {
 	for _, v := range m.hostOrder {
 		h = m.hosts[v]
 
-		view += formatHostname(h.name, hostnamePad) + " " + h.progress.View() + "\n" +
+		view += formatHostname(h.name, hostnamePad) + " " + h.progress.ViewAs(h.percentage) + "\n" +
 			strings.Repeat(" ", hostnamePad+1)
 
 		if h.err != "" {
 			view += errorStyle(h.err)
-
 		} else {
 			view += helpStyle(h.status)
 		}
 
 		view += "\n\n"
 	}
+
 	return view
+
 }
+
 func formatHostname(text string, maxLen int) string {
 	if len(text) == maxLen {
 		return text

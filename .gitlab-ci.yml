@@ -11,4 +11,4 @@ release:
   variables:
     GIT_DEPTH: 0
   script: # according to a large language model near me, these configs should be merged by goreleaser
-    - goreleaser release --clean --config .goreleaser.yaml --config .goreleaser.gitlab.yaml
+    - goreleaser release --clean --config .goreleaser.gitlab.deif.com.yaml

@@ -5,3 +5,6 @@ gitlab_urls:
   use_job_token: true
 
 
+includes:
+  - from_file:
+      path: goreleaser.yaml

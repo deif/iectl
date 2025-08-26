@@ -1,3 +1,5 @@
+version: 2
+
 gitlab_urls:
   api: https://gitlab.deif.com/api/v4/
   download: https://gitlab.deif.com

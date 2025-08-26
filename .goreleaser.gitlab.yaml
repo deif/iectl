@@ -1,0 +1,7 @@
+gitlab_urls:
+  api: https://gitlab.deif.com/api/v4/
+  download: https://gitlab.deif.com
+
+  use_job_token: true
+
+

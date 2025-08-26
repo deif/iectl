@@ -1,0 +1,14 @@
+stages:
+  - release
+
+release:
+  stage: release
+  image:
+    name: goreleaser/goreleaser
+    entrypoint: ['']
+  only:
+    - tags
+  variables:
+    GIT_DEPTH: 0
+  script: # according to a large language model near me, these configs should be merged by goreleaser
+    - goreleaser release --clean --config .goreleaser.yaml --config .goreleaser.gitlab.yaml

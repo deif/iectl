@@ -6,7 +6,51 @@ gitlab_urls:
 
   use_job_token: true
 
+before:
+  hooks:
+    - go generate ./...
 
-includes:
-  - from_file:
-      path: goreleaser.yaml
+builds:
+  - &defaultBuild
+    id: linux
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags: 
+      - -trimpath
+    ldflags:
+      - | 
+          -s -w
+          -X github.com/deif/iectl/cmd.version={{ .Version }} 
+          -X github.com/deif/iectl/cmd.commit={{ .Commit }} 
+          -X github.com/deif/iectl/cmd.date={{ .CommitDate }}
+  - << : *defaultBuild
+    id: windows
+    goos:
+      - windows
+#    hooks:
+#      post:
+#      - cmd: | 
+#          osslsigncode sign -pkcs12 
+#          /tmp/cert.pfx -n "iectl" 
+#          -i "https://github.com/deif/iectl" 
+#          -t http://timestamp.digicert.com 
+#          -in {{ .Path }} -out {{ .Path }}-signed.exe
+#      # Throw away the unsigned binary
+#      - cmd: mv {{ .Path }}-signed.exe {{ .Path }}
+
+archives:
+  - formats: [tar.gz]
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"

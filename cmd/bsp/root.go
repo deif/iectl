@@ -40,7 +40,12 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("could not get targets from flags: %w", err)
 		}
 
+		options := make([]auth.Option, 0)
 		insecure, _ := cmd.Flags().GetBool("insecure")
+		if insecure {
+			options = append(options, auth.WithInsecure())
+		}
+
 		user, _ := cmd.Flags().GetString("username")
 		pass, _ := cmd.Flags().GetString("password")
 
@@ -49,7 +54,7 @@ var RootCmd = &cobra.Command{
 		collection := target.Collection{}
 
 		for _, host := range targets {
-			c, err := auth.Client(host, user, pass, insecure)
+			c, err := auth.Client(host, user, pass)
 
 			// If we have a terminal, and the error was invalid credentials
 			// try to fix the issue by asking for another password...
@@ -208,6 +213,12 @@ func init() {
 	RootCmd.PersistentFlags().Bool("target-any", false, "any target, first answer picked - for networks with exactly one controller")
 	RootCmd.PersistentFlags().Bool("target-all", false, "search for targets, operate on all found within timeout")
 	RootCmd.MarkFlagsMutuallyExclusive("target", "target-any", "target-all")
+
+	RootCmd.PersistentFlags().Bool("ssh-proxyjump-insecure", false, "skip host verification of ssh-proxyjump")
+	RootCmd.PersistentFlags().String("ssh-proxyjump-username", "", "username used for authentication")
+
+	RootCmd.PersistentFlags().StringSliceP("ssh-proxyjump", "J", []string{}, "establish a connection to the target host by first SSH-ing into the jump host(s), then setting up TCP forwarding from there to the final destination")
+	RootCmd.MarkFlagsMutuallyExclusive("ssh-proxyjump", "target-any", "target-all")
 
 	RootCmd.PersistentFlags().Duration("target-timeout", time.Second, "timeout for --target-all and --target-any")
 

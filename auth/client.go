@@ -2,7 +2,6 @@ package auth
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -12,36 +11,49 @@ import (
 	"net/url"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
-
-type timeoutConn struct {
-	net.Conn
-	writeTimeout time.Duration
-}
-
-func (c *timeoutConn) Write(b []byte) (int, error) {
-	c.SetWriteDeadline(time.Now().Add(c.writeTimeout))
-	return c.Conn.Write(b)
-}
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func Client(host, user, pass string, insecure bool) (*http.Client, error) {
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			conn, err := (&net.Dialer{Timeout: time.Minute}).DialContext(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			return &timeoutConn{
-				Conn:         conn,
-				writeTimeout: time.Minute,
-			}, nil
-		},
+type Option func(*http.Transport)
+
+func WithInsecure() Option {
+	return func(t *http.Transport) {
+		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+}
+
+func WithSSHTunnel(host string, config *ssh.ClientConfig) (Option, error) {
+	sshClientConn, err := ssh.Dial("tcp", host, config)
+	if err != nil {
+		return nil, fmt.Errorf("unable to dial ssh host %s: %w", host, err)
 	}
 
-	if insecure {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	return func(t *http.Transport) {
+		t.DialContext = sshClientConn.DialContext
+	}, nil
+}
+
+func Client(host, user, pass string, opts ...Option) (*http.Client, error) {
+	// this is the golang 1.25 http.DefaultTransport
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(transport)
 	}
 
 	c := &http.Client{Transport: transport}

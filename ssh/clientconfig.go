@@ -3,6 +3,7 @@ package ssh
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 
@@ -31,17 +32,26 @@ func ClientConfig(opts ...Option) (*ssh.ClientConfig, error) {
 
 	// the same with auth methods, we gotta have auth methods...
 	if len(config.Auth) == 0 {
-		d, err := DefaultAuthMethods()
+		d, err := DefaultSignerAuth()
 		if err != nil {
-			return nil, fmt.Errorf("unable to ")
+			return nil, fmt.Errorf("unable to initialize default signer auth: %w", err)
 		}
 		d(config)
+	}
+
+	// set default user if not set
+	if config.User == "" {
+		user, err := user.Current()
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine current user: %w", err)
+		}
+		config.User = user.Username
 	}
 
 	return config, nil
 }
 
-func DefaultAuthMethods() (Option, error) {
+func DefaultSignerAuth() (Option, error) {
 	methods := make([]ssh.AuthMethod, 0)
 
 	homeDir, err := os.UserHomeDir()
@@ -59,6 +69,9 @@ func DefaultAuthMethods() (Option, error) {
 	for _, keyFile := range keyFiles {
 		keyPath := filepath.Join(sshDir, keyFile)
 		key, err := os.ReadFile(keyPath)
+		if os.IsNotExist(err) {
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("unable to read private key %s: %w", keyPath, err)
 		}

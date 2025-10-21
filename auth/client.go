@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -17,22 +19,47 @@ import (
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-type Option func(*http.Transport)
+type Option func(*http.Transport) error
 
 func WithInsecure() Option {
-	return func(t *http.Transport) {
+	return func(t *http.Transport) error {
 		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		return nil
 	}
 }
 
-func WithSSHTunnel(host string, config *ssh.ClientConfig) (Option, error) {
-	sshClientConn, err := ssh.Dial("tcp", host, config)
+func WithSSHTunnel(target string, config *ssh.ClientConfig) (Option, error) {
+	// parse a user@host:port string
+	user, host, port, err := parseSSHTarget(target)
 	if err != nil {
-		return nil, fmt.Errorf("unable to dial ssh host %s: %w", host, err)
+		return nil, fmt.Errorf("unable to parse ssh target %s: %w", target, err)
 	}
 
-	return func(t *http.Transport) {
-		t.DialContext = sshClientConn.DialContext
+	// if a user was provided in the target string, override the config user
+	if user != "" {
+		config.User = user
+	}
+
+	// default port if not provided
+	if port == "" {
+		port = "22"
+	}
+
+	// we use the current transport's DialContext and wraps it in an ssh client's DialContext
+	return func(t *http.Transport) error {
+		hostPort := net.JoinHostPort(host, port)
+		conn, err := t.DialContext(context.Background(), "tcp", hostPort)
+		if err != nil {
+			return fmt.Errorf("unable to dial ssh target %s: %w", target, err)
+		}
+
+		c, chans, reqs, err := ssh.NewClientConn(conn, hostPort, config)
+		if err != nil {
+			return fmt.Errorf("unable to create ssh client conn: %w", err)
+		}
+
+		t.DialContext = ssh.NewClient(c, chans, reqs).DialContext
+		return nil
 	}, nil
 }
 
@@ -53,7 +80,10 @@ func Client(host, user, pass string, opts ...Option) (*http.Client, error) {
 
 	// Apply options
 	for _, opt := range opts {
-		opt(transport)
+		err := opt(transport)
+		if err != nil {
+			return nil, fmt.Errorf("unable to apply option %T: %w", opt, err)
+		}
 	}
 
 	c := &http.Client{Transport: transport}
@@ -213,4 +243,27 @@ func (a *authTransport) keepalive(url url.URL) {
 
 		a.token.Store(&jwt)
 	}
+}
+
+func parseSSHTarget(s string) (username, hostname, port string, err error) {
+	// Split username from host:port
+	var userHost string
+	if idx := strings.Index(s, "@"); idx != -1 {
+		username = s[:idx]
+		userHost = s[idx+1:]
+	} else {
+		userHost = s
+	}
+
+	// Split hostname from port
+	hostname, port, err = net.SplitHostPort(userHost)
+	if err != nil {
+		// If there's no port, SplitHostPort will fail
+		// In that case, the whole thing is just the hostname
+		hostname = userHost
+		port = ""
+		err = nil
+	}
+
+	return
 }

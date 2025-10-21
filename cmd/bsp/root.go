@@ -15,6 +15,7 @@ import (
 	"github.com/deif/iectl/cmd/bsp/service"
 	"github.com/deif/iectl/cmd/bsp/sshkey"
 	"github.com/deif/iectl/mdns"
+	sshc "github.com/deif/iectl/ssh"
 	"github.com/deif/iectl/target"
 	"github.com/deif/iectl/tui"
 	"github.com/miekg/dns"
@@ -46,21 +47,40 @@ var RootCmd = &cobra.Command{
 			options = append(options, auth.WithInsecure())
 		}
 
+		sshProxyJumps, _ := cmd.Flags().GetStringSlice("ssh-proxyjump")
+		sshProxyJumpInsecure, _ := cmd.Flags().GetBool("ssh-proxyjump-insecure")
+
+		sshOpts := make([]sshc.Option, 0)
+		if sshProxyJumpInsecure {
+			sshOpts = append(sshOpts, sshc.WithInsecureIgnoreHostkey())
+		}
+
+		for _, v := range sshProxyJumps {
+			c, err := sshc.ClientConfig(sshOpts...)
+			if err != nil {
+				return fmt.Errorf("unable to create ssh client config for proxyjump %s: %w", v, err)
+			}
+			opt, err := auth.WithSSHTunnel(v, c)
+			if err != nil {
+				return fmt.Errorf("unable to create ssh tunnel for proxyjump %s: %w", v, err)
+			}
+			options = append(options, opt)
+		}
+
 		user, _ := cmd.Flags().GetString("username")
 		pass, _ := cmd.Flags().GetString("password")
 
 		interactive, _ := cmd.Flags().GetBool("interactive")
 
 		collection := target.Collection{}
-
 		for _, host := range targets {
-			c, err := auth.Client(host, user, pass)
+			c, err := auth.Client(host, user, pass, options...)
 
 			// If we have a terminal, and the error was invalid credentials
 			// try to fix the issue by asking for another password...
 			if errors.Is(err, auth.ErrInvalidCredentials) && interactive {
 				for {
-					fmt.Printf("Enter password for %s@%s: ", user, host)
+					fmt.Printf("Enter password for https://%s@%s: ", user, host)
 
 					var p []byte
 					p, err = readPassword()
@@ -73,7 +93,7 @@ var RootCmd = &cobra.Command{
 					pass = string(p)
 
 					fmt.Println()
-					c, err = auth.Client(host, user, pass, insecure)
+					c, err = auth.Client(host, user, pass, options...)
 					if errors.Is(err, auth.ErrInvalidCredentials) {
 						continue
 					}
@@ -215,8 +235,6 @@ func init() {
 	RootCmd.MarkFlagsMutuallyExclusive("target", "target-any", "target-all")
 
 	RootCmd.PersistentFlags().Bool("ssh-proxyjump-insecure", false, "skip host verification of ssh-proxyjump")
-	RootCmd.PersistentFlags().String("ssh-proxyjump-username", "", "username used for authentication")
-
 	RootCmd.PersistentFlags().StringSliceP("ssh-proxyjump", "J", []string{}, "establish a connection to the target host by first SSH-ing into the jump host(s), then setting up TCP forwarding from there to the final destination")
 	RootCmd.MarkFlagsMutuallyExclusive("ssh-proxyjump", "target-any", "target-all")
 

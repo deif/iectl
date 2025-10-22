@@ -55,6 +55,15 @@ var RootCmd = &cobra.Command{
 			sshOpts = append(sshOpts, sshc.WithInsecureIgnoreHostkey())
 		}
 
+		sshProxyJumpIdentity, _ := cmd.Flags().GetString("ssh-proxyjump-identity")
+		if sshProxyJumpIdentity != "" {
+			opt, err := sshc.WithIdentityFile(sshProxyJumpIdentity)
+			if err != nil {
+				return fmt.Errorf("unable to create ssh client config for proxyjump identity %s: %w", sshProxyJumpIdentity, err)
+			}
+			sshOpts = append(sshOpts, opt)
+		}
+
 		for _, v := range sshProxyJumps {
 			c, err := sshc.ClientConfig(sshOpts...)
 			if err != nil {
@@ -234,6 +243,7 @@ func init() {
 	RootCmd.PersistentFlags().Bool("target-all", false, "search for targets, operate on all found within timeout")
 	RootCmd.MarkFlagsMutuallyExclusive("target", "target-any", "target-all")
 
+	RootCmd.PersistentFlags().String("ssh-proxyjump-identity", "", "specify private key file for ssh-proxyjump authentication")
 	RootCmd.PersistentFlags().Bool("ssh-proxyjump-insecure", false, "skip host verification of ssh-proxyjump")
 	RootCmd.PersistentFlags().StringSliceP("ssh-proxyjump", "J", []string{}, "establish a connection to the target host by first SSH-ing into the jump host(s), then setting up TCP forwarding from there to the final destination")
 	RootCmd.MarkFlagsMutuallyExclusive("ssh-proxyjump", "target-any", "target-all")

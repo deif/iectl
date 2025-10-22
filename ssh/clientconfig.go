@@ -50,6 +50,21 @@ func ClientConfig(opts ...Option) (*ssh.ClientConfig, error) {
 
 	return config, nil
 }
+func WithIdentityFile(path string) (Option, error) {
+	key, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read identity file %s: %w", path, err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse identity file %s: %w", path, err)
+	}
+
+	return func(cc *ssh.ClientConfig) {
+		cc.Auth = append(cc.Auth, ssh.PublicKeys(signer))
+	}, nil
+}
 
 func DefaultSignerAuth() (Option, error) {
 	methods := make([]ssh.AuthMethod, 0)
@@ -85,7 +100,7 @@ func DefaultSignerAuth() (Option, error) {
 	}
 
 	return func(cc *ssh.ClientConfig) {
-		cc.Auth = methods
+		cc.Auth = append(cc.Auth, methods...)
 	}, nil
 }
 

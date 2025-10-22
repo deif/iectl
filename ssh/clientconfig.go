@@ -67,7 +67,7 @@ func WithIdentityFile(path string) (Option, error) {
 }
 
 func DefaultSignerAuth() (Option, error) {
-	methods := make([]ssh.AuthMethod, 0)
+	signers := make([]ssh.Signer, 0)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -96,11 +96,11 @@ func DefaultSignerAuth() (Option, error) {
 			return nil, fmt.Errorf("unable to parse private key %s: %w", keyPath, err)
 		}
 
-		methods = append(methods, ssh.PublicKeys(signer))
+		signers = append(signers, signer)
 	}
 
 	return func(cc *ssh.ClientConfig) {
-		cc.Auth = append(cc.Auth, methods...)
+		cc.Auth = append(cc.Auth, ssh.PublicKeys(signers...))
 	}, nil
 }
 

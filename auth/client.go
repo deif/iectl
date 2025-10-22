@@ -26,14 +26,14 @@ func WithInsecure(t *http.Transport) error {
 	return nil
 }
 
-func WithSSHTunnel(target string, config *ssh.ClientConfig) (Option, error) {
+func WithSSHTunnel(proxy string, config *ssh.ClientConfig) (Option, error) {
 	// parse a user@host:port string
-	user, host, port, err := parseSSHTarget(target)
+	user, host, port, err := parseSSHTarget(proxy)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse ssh target %s: %w", target, err)
+		return nil, fmt.Errorf("unable to parse ssh proxy %s: %w", proxy, err)
 	}
 
-	// if a user was provided in the target string, override the config user
+	// if a user was provided in the proxy string, override the config user
 	if user != "" {
 		config.User = user
 	}
@@ -48,7 +48,7 @@ func WithSSHTunnel(target string, config *ssh.ClientConfig) (Option, error) {
 		hostPort := net.JoinHostPort(host, port)
 		conn, err := t.DialContext(context.Background(), "tcp", hostPort)
 		if err != nil {
-			return fmt.Errorf("unable to dial ssh target %s: %w", target, err)
+			return fmt.Errorf("unable to dial ssh proxy %s: %w", proxy, err)
 		}
 
 		c, chans, reqs, err := ssh.NewClientConn(conn, hostPort, config)
@@ -245,20 +245,20 @@ func (a *authTransport) keepalive(url url.URL) {
 
 func parseSSHTarget(s string) (username, hostname, port string, err error) {
 	// Split username from host:port
-	var userHost string
+	var hostPort string
 	if idx := strings.Index(s, "@"); idx != -1 {
 		username = s[:idx]
-		userHost = s[idx+1:]
+		hostPort = s[idx+1:]
 	} else {
-		userHost = s
+		hostPort = s
 	}
 
 	// Split hostname from port
-	hostname, port, err = net.SplitHostPort(userHost)
+	hostname, port, err = net.SplitHostPort(hostPort)
 	if err != nil {
 		// If there's no port, SplitHostPort will fail
 		// In that case, the whole thing is just the hostname
-		hostname = userHost
+		hostname = hostPort
 		port = ""
 		err = nil
 	}

@@ -44,7 +44,7 @@ var RootCmd = &cobra.Command{
 		options := make([]auth.Option, 0)
 		insecure, _ := cmd.Flags().GetBool("insecure")
 		if insecure {
-			options = append(options, auth.WithInsecure())
+			options = append(options, auth.WithInsecure)
 		}
 
 		sshProxyJumps, _ := cmd.Flags().GetStringSlice("ssh-proxyjump")
@@ -52,7 +52,7 @@ var RootCmd = &cobra.Command{
 
 		sshOpts := make([]sshc.Option, 0)
 		if sshProxyJumpInsecure {
-			sshOpts = append(sshOpts, sshc.WithInsecureIgnoreHostkey())
+			sshOpts = append(sshOpts, sshc.WithInsecureIgnoreHostkey)
 		}
 
 		sshProxyJumpIdentity, _ := cmd.Flags().GetString("ssh-proxyjump-identity")

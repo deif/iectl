@@ -21,11 +21,9 @@ var ErrInvalidCredentials = errors.New("invalid credentials")
 
 type Option func(*http.Transport) error
 
-func WithInsecure() Option {
-	return func(t *http.Transport) error {
-		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-		return nil
-	}
+func WithInsecure(t *http.Transport) error {
+	t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	return nil
 }
 
 func WithSSHTunnel(target string, config *ssh.ClientConfig) (Option, error) {

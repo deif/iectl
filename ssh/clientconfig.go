@@ -50,6 +50,7 @@ func ClientConfig(opts ...Option) (*ssh.ClientConfig, error) {
 
 	return config, nil
 }
+
 func WithIdentityFile(path string) (Option, error) {
 	key, err := os.ReadFile(path)
 	if err != nil {
@@ -116,10 +117,8 @@ func WithUser(u string) Option {
 	}
 }
 
-func WithInsecureIgnoreHostkey() Option {
-	return func(cc *ssh.ClientConfig) {
-		cc.HostKeyCallback = ssh.InsecureIgnoreHostKey()
-	}
+func WithInsecureIgnoreHostkey(cc *ssh.ClientConfig) {
+	cc.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 }
 
 func DefaultKnownHostCallback() (Option, error) {

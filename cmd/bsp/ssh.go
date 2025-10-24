@@ -105,7 +105,7 @@ func tmuxCommandFromTargets(targets target.Collection) []string {
 		"tmux",
 		"new-session", "-d", "-s", session,
 		// make the detached session big enough for a handful of pane's
-		"-x", "200", "-y", "200",
+		"-x", "1200", "-y", "1200",
 		fmt.Sprintf(sshCmd, user, targets[0].Hostname),
 	}
 

@@ -10,38 +10,78 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
-
-type timeoutConn struct {
-	net.Conn
-	writeTimeout time.Duration
-}
-
-func (c *timeoutConn) Write(b []byte) (int, error) {
-	c.SetWriteDeadline(time.Now().Add(c.writeTimeout))
-	return c.Conn.Write(b)
-}
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func Client(host, user, pass string, insecure bool) (*http.Client, error) {
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			conn, err := (&net.Dialer{Timeout: time.Minute}).DialContext(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			return &timeoutConn{
-				Conn:         conn,
-				writeTimeout: time.Minute,
-			}, nil
-		},
+type Option func(*http.Transport) error
+
+func WithInsecure(t *http.Transport) error {
+	t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	return nil
+}
+
+func WithSSHTunnel(proxy string, config *ssh.ClientConfig) (Option, error) {
+	// parse a user@host:port string
+	user, host, port, err := parseSSHTarget(proxy)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse ssh proxy %s: %w", proxy, err)
 	}
 
-	if insecure {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	// if a user was provided in the proxy string, override the config user
+	if user != "" {
+		config.User = user
+	}
+
+	// default port if not provided
+	if port == "" {
+		port = "22"
+	}
+
+	// we use the current transport's DialContext and wraps it in an ssh client's DialContext
+	return func(t *http.Transport) error {
+		hostPort := net.JoinHostPort(host, port)
+		conn, err := t.DialContext(context.Background(), "tcp", hostPort)
+		if err != nil {
+			return fmt.Errorf("unable to dial ssh proxy %s: %w", proxy, err)
+		}
+
+		c, chans, reqs, err := ssh.NewClientConn(conn, hostPort, config)
+		if err != nil {
+			return fmt.Errorf("unable to create ssh client conn: %w", err)
+		}
+
+		t.DialContext = ssh.NewClient(c, chans, reqs).DialContext
+		return nil
+	}, nil
+}
+
+func Client(host, user, pass string, opts ...Option) (*http.Client, error) {
+	// this is the golang 1.25 http.DefaultTransport
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		err := opt(transport)
+		if err != nil {
+			return nil, fmt.Errorf("unable to apply option %T: %w", opt, err)
+		}
 	}
 
 	c := &http.Client{Transport: transport}
@@ -201,4 +241,27 @@ func (a *authTransport) keepalive(url url.URL) {
 
 		a.token.Store(&jwt)
 	}
+}
+
+func parseSSHTarget(s string) (username, hostname, port string, err error) {
+	// Split username from host:port
+	var hostPort string
+	if idx := strings.Index(s, "@"); idx != -1 {
+		username = s[:idx]
+		hostPort = s[idx+1:]
+	} else {
+		hostPort = s
+	}
+
+	// Split hostname from port
+	hostname, port, err = net.SplitHostPort(hostPort)
+	if err != nil {
+		// If there's no port, SplitHostPort will fail
+		// In that case, the whole thing is just the hostname
+		hostname = hostPort
+		port = ""
+		err = nil
+	}
+
+	return
 }

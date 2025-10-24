@@ -15,6 +15,7 @@ import (
 	"github.com/deif/iectl/cmd/bsp/service"
 	"github.com/deif/iectl/cmd/bsp/sshkey"
 	"github.com/deif/iectl/mdns"
+	sshc "github.com/deif/iectl/ssh"
 	"github.com/deif/iectl/target"
 	"github.com/deif/iectl/tui"
 	"github.com/miekg/dns"
@@ -40,22 +41,55 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("could not get targets from flags: %w", err)
 		}
 
+		options := make([]auth.Option, 0)
 		insecure, _ := cmd.Flags().GetBool("insecure")
+		if insecure {
+			options = append(options, auth.WithInsecure)
+		}
+
+		sshProxyJumps, _ := cmd.Flags().GetStringSlice("ssh-proxyjump")
+		sshProxyJumpInsecure, _ := cmd.Flags().GetBool("ssh-proxyjump-insecure")
+
+		sshOpts := make([]sshc.Option, 0)
+		if sshProxyJumpInsecure {
+			sshOpts = append(sshOpts, sshc.WithInsecureIgnoreHostkey)
+		}
+
+		sshProxyJumpIdentity, _ := cmd.Flags().GetString("ssh-proxyjump-identity")
+		if sshProxyJumpIdentity != "" {
+			opt, err := sshc.WithIdentityFile(sshProxyJumpIdentity)
+			if err != nil {
+				return fmt.Errorf("unable to create ssh client config for proxyjump identity %s: %w", sshProxyJumpIdentity, err)
+			}
+			sshOpts = append(sshOpts, opt)
+		}
+
+		for _, v := range sshProxyJumps {
+			c, err := sshc.ClientConfig(sshOpts...)
+			if err != nil {
+				return fmt.Errorf("unable to create ssh client config for proxyjump %s: %w", v, err)
+			}
+			opt, err := auth.WithSSHTunnel(v, c)
+			if err != nil {
+				return fmt.Errorf("unable to create ssh tunnel for proxyjump %s: %w", v, err)
+			}
+			options = append(options, opt)
+		}
+
 		user, _ := cmd.Flags().GetString("username")
 		pass, _ := cmd.Flags().GetString("password")
 
 		interactive, _ := cmd.Flags().GetBool("interactive")
 
 		collection := target.Collection{}
-
 		for _, host := range targets {
-			c, err := auth.Client(host, user, pass, insecure)
+			c, err := auth.Client(host, user, pass, options...)
 
 			// If we have a terminal, and the error was invalid credentials
 			// try to fix the issue by asking for another password...
 			if errors.Is(err, auth.ErrInvalidCredentials) && interactive {
 				for {
-					fmt.Printf("Enter password for %s@%s: ", user, host)
+					fmt.Printf("Enter password for https://%s@%s: ", user, host)
 
 					var p []byte
 					p, err = readPassword()
@@ -68,7 +102,7 @@ var RootCmd = &cobra.Command{
 					pass = string(p)
 
 					fmt.Println()
-					c, err = auth.Client(host, user, pass, insecure)
+					c, err = auth.Client(host, user, pass, options...)
 					if errors.Is(err, auth.ErrInvalidCredentials) {
 						continue
 					}
@@ -208,6 +242,11 @@ func init() {
 	RootCmd.PersistentFlags().Bool("target-any", false, "any target, first answer picked - for networks with exactly one controller")
 	RootCmd.PersistentFlags().Bool("target-all", false, "search for targets, operate on all found within timeout")
 	RootCmd.MarkFlagsMutuallyExclusive("target", "target-any", "target-all")
+
+	RootCmd.PersistentFlags().String("ssh-proxyjump-identity", "", "specify private key file for ssh-proxyjump authentication")
+	RootCmd.PersistentFlags().Bool("ssh-proxyjump-insecure", false, "skip host verification of ssh-proxyjump")
+	RootCmd.PersistentFlags().StringSliceP("ssh-proxyjump", "J", []string{}, "establish a connection to the target host by first SSH-ing into the jump host(s), then setting up TCP forwarding from there to the final destination")
+	RootCmd.MarkFlagsMutuallyExclusive("ssh-proxyjump", "target-any", "target-all")
 
 	RootCmd.PersistentFlags().Duration("target-timeout", time.Second, "timeout for --target-all and --target-any")
 

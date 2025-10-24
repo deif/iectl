@@ -49,17 +49,24 @@ iectl [command] [options]
 
 ### Available Commands
 
-| Command             | Description                       |
-| ------------------- | --------------------------------- |
-| `browse`            | Browse for DEIF devices           |
-| `bsp install`       | Install firmware on device        |
-| `bsp factory-reset` | Reset device to factory state     |
-| `bsp hostname`      | Get or set hostname               |
-| `bsp service rdp`   | Get or enable/disable rdp         |
-| `bsp service ssh`   | Get or enable/disable ssh         |
-| `bsp restart`       | Reboots device                    |
-| `bsp status`        | General device status             |
-| `help`              | Displays help information         |
+| Command                        | Description                                   |
+| ------------------------------ | --------------------------------------------- |
+| `browse`                       | Browse DEIF devices on the network           |
+| `discover`                     | Discover DEIF devices on the network         |
+| `version`                      | Print version info on iectl                  |
+| `bsp install <firmware>`       | Install firmware on device                   |
+| `bsp factory-reset`            | Reset device to factory state                |
+| `bsp hostname <new hostname>`  | Get or set hostname                          |
+| `bsp restart`                  | Reboots device                               |
+| `bsp status`                   | General device status                        |
+| `bsp session`                  | Interactive session with device              |
+| `bsp ssh`                      | Open SSH sessions to one or many targets     |
+| `bsp service rdp [enable\|disable\|status]` | Get or enable/disable RDP                |
+| `bsp service ssh [enable\|disable\|status]` | Get or enable/disable SSH                |
+| `bsp sshkey`                   | Get SSH public key for root user             |
+| `bsp sshkey set <keyfile>`     | Set SSH public key for root user             |
+| `bsp sshkey remove`            | Remove SSH public key for root user          |
+| `help`                         | Displays help information                     |
 
 For more details, use:
 

@@ -83,7 +83,8 @@ var RootCmd = &cobra.Command{
 
 		collection := target.Collection{}
 		for _, host := range targets {
-			c, err := auth.Client(host, user, pass, options...)
+			opts := append(options, auth.WithCredentials(host, user, pass))
+			c, err := auth.Client(opts...)
 
 			// If we have a terminal, and the error was invalid credentials
 			// try to fix the issue by asking for another password...
@@ -102,7 +103,9 @@ var RootCmd = &cobra.Command{
 					pass = string(p)
 
 					fmt.Println()
-					c, err = auth.Client(host, user, pass, options...)
+					opts := append(options, auth.WithCredentials(host, user, pass))
+					c, err = auth.Client(opts...)
+
 					if errors.Is(err, auth.ErrInvalidCredentials) {
 						continue
 					}

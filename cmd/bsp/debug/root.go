@@ -48,9 +48,9 @@ func addPrefixIfMissing(s string, prefix string) string {
 }
 
 var (
-	path         string
-	interactive  bool
-	printHeader  bool
+	path        string
+	interactive bool
+	printHeader bool
 	printBinary bool
 )
 
@@ -110,7 +110,6 @@ func mimeIsBinary(mime string) bool {
 			return true
 		}
 	}
-	fmt.Println("determining not binary mime")
 	return false
 }
 
@@ -135,7 +134,7 @@ func isResponsePrintable(read *bufio.Reader) bool {
 			// if we are at the end of the chunk, see if last byte(s) could
 			// be the start of valid utf8 that got cut off
 			// utf8 maxes at 4 octets per rune
-			if i < len(bytes) - 4 {
+			if i < len(bytes)-4 {
 				for _, byte := range bytes[i:] {
 					if !utf8.RuneStart(byte) {
 						return false

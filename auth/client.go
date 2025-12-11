@@ -19,9 +19,13 @@ import (
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-type Option func(*http.Transport) error
+type Option func(*http.Client) error
 
-func WithInsecure(t *http.Transport) error {
+func WithInsecure(c *http.Client) error {
+	t, ok := c.Transport.(*http.Transport)
+	if !ok {
+		return fmt.Errorf("transport is not *http.Transport")
+	}
 	t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	return nil
 }
@@ -44,24 +48,39 @@ func WithSSHTunnel(proxy string, config *ssh.ClientConfig) (Option, error) {
 	}
 
 	// we use the current transport's DialContext and wraps it in an ssh client's DialContext
-	return func(t *http.Transport) error {
+	return func(c *http.Client) error {
+		t, ok := c.Transport.(*http.Transport)
+		if !ok {
+			return fmt.Errorf("transport is not *http.Transport")
+		}
+
 		hostPort := net.JoinHostPort(host, port)
 		conn, err := t.DialContext(context.Background(), "tcp", hostPort)
 		if err != nil {
 			return fmt.Errorf("unable to dial ssh proxy %s: %w", proxy, err)
 		}
 
-		c, chans, reqs, err := ssh.NewClientConn(conn, hostPort, config)
+		sshConn, chans, reqs, err := ssh.NewClientConn(conn, hostPort, config)
 		if err != nil {
 			return fmt.Errorf("unable to create ssh client conn: %w", err)
 		}
 
-		t.DialContext = ssh.NewClient(c, chans, reqs).DialContext
+		t.DialContext = ssh.NewClient(sshConn, chans, reqs).DialContext
 		return nil
 	}, nil
 }
 
-func Client(host, user, pass string, opts ...Option) (*http.Client, error) {
+func WithCredentials(host, user, pass string) Option {
+	return func(c *http.Client) error {
+		t := &authTransport{
+			RoundTripper: c.Transport,
+		}
+		c.Transport = t
+		return t.login(host, user, pass)
+	}
+}
+
+func Client(opts ...Option) (*http.Client, error) {
 	// this is the golang 1.25 http.DefaultTransport
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -76,79 +95,14 @@ func Client(host, user, pass string, opts ...Option) (*http.Client, error) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		err := opt(transport)
-		if err != nil {
-			return nil, fmt.Errorf("unable to apply option %T: %w", opt, err)
-		}
-	}
-
 	c := &http.Client{Transport: transport}
 
-	u := url.URL{
-		Scheme: "https",
-		Host:   host,
-		Path:   "/auth/login",
-	}
-
-	authRequestDoc := struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}{
-		Username: user,
-		Password: pass,
-	}
-
-	requestBody, err := json.Marshal(authRequestDoc)
-	if err != nil {
-		return nil, fmt.Errorf("unable to marshal auth request: %w", err)
-	}
-
-	authRequest, err := http.NewRequest("POST", u.String(), bytes.NewReader(requestBody))
-	if err != nil {
-		return nil, fmt.Errorf("unable to create http request: %w", err)
-	}
-
-	authRequest.Header.Set("Content-Type", "application/json")
-	resp, err := c.Do(authRequest)
-	if err != nil {
-		return nil, fmt.Errorf("could not http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusForbidden:
-		return nil, ErrInvalidCredentials
-	case http.StatusOK:
-	default:
-		return nil, fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
-	}
-
-	// create a new Transport, using the old transport from c
-	t := &authTransport{
-		RoundTripper: c.Transport,
-	}
-
-	// replace c's transport with the auth transport
-	c.Transport = t
-
-	jwt := resp.Header.Get("Authorization")
-	t.token.Store(&jwt)
-
-	for _, v := range resp.Cookies() {
-		if v.Name == "refresh_token" {
-			t.refreshToken = v.Value
-
-			// dont look further
-			break
+	// Apply options
+	for _, opt := range opts {
+		err := opt(c)
+		if err != nil {
+			return nil, fmt.Errorf("unable to apply option: %w", err)
 		}
-	}
-
-	// if we have a refreshToken, keep our JWT alive
-	if t.refreshToken != "" {
-		// start loop that refreshes token
-		go t.keepalive(u)
 	}
 
 	return c, nil
@@ -166,8 +120,14 @@ func (a *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	clonedReq := req.Clone(req.Context())
 
 	t := a.token.Load()
-	clonedReq.Header.Set("Authorization", *t)
+	if t != nil {
+		clonedReq.Header.Set("Authorization", *t)
+	}
 
+	// warning: we try to fetch the refreshToken loop's error
+	// as a convenience to the caller - but it is racy - it might be stuck at something
+	// or starved of resources hence, the refreshTokenErr might not be set yet - or it might
+	// not have encountered an error at all...
 	resp, err := a.RoundTripper.RoundTrip(clonedReq)
 	if err != nil {
 		refreshErr := a.refreshTokenErr.Load()
@@ -181,11 +141,73 @@ func (a *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if resp.StatusCode == http.StatusUnauthorized {
 		refreshErr := a.refreshTokenErr.Load()
 		if refreshErr != nil {
-			return resp, errors.Join(err, fmt.Errorf("status 401 unauthorized, prior to that: %w", *refreshErr))
+			return resp, fmt.Errorf("status 401 unauthorized, prior to that: %w", *refreshErr)
 		}
 	}
 
 	return resp, err
+}
+
+func (a *authTransport) login(host, user, pass string) error {
+	u := url.URL{
+		Scheme: "https",
+		Host:   host,
+		Path:   "/auth/login",
+	}
+
+	authRequestDoc := struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}{
+		Username: user,
+		Password: pass,
+	}
+
+	requestBody, err := json.Marshal(authRequestDoc)
+	if err != nil {
+		return fmt.Errorf("unable to marshal auth request: %w", err)
+	}
+
+	authRequest, err := http.NewRequest("POST", u.String(), bytes.NewReader(requestBody))
+	if err != nil {
+		return fmt.Errorf("unable to create http request: %w", err)
+	}
+
+	authRequest.Header.Set("Content-Type", "application/json")
+
+	// Use the underlying RoundTripper to execute the request
+	resp, err := a.RoundTripper.RoundTrip(authRequest)
+	if err != nil {
+		return fmt.Errorf("could not http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusForbidden:
+		return ErrInvalidCredentials
+	case http.StatusOK:
+	default:
+		return fmt.Errorf("unexpected http status code: %d", resp.StatusCode)
+	}
+
+	jwt := resp.Header.Get("Authorization")
+	if jwt == "" {
+		return fmt.Errorf("authorization header not found in response")
+	}
+
+	a.token.Store(&jwt)
+
+	for _, v := range resp.Cookies() {
+		if v.Name == "refresh_token" {
+			a.refreshToken = v.Value
+
+			// start keepalive routine
+			go a.keepalive(u)
+			break
+		}
+	}
+
+	return nil
 }
 
 func (a *authTransport) keepalive(url url.URL) {

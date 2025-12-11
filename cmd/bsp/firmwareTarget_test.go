@@ -15,7 +15,7 @@ import (
 const HOSTNAME = "iE250-05eb2f.local"
 
 func TestFirmware(t *testing.T) {
-	c, err := auth.Client(HOSTNAME, "admin", "admin", auth.WithInsecure)
+	c, err := auth.Client(auth.WithInsecure, auth.WithCredentials(HOSTNAME, "admin", "admin"))
 	if err != nil {
 		t.Fatalf("cannot communicate: %s", err)
 
